@@ -17,7 +17,9 @@ jobs:
       - run: go version
 
       - name: Generate 
-        run: go generate -v ./...
+        run: |
+          go generate -v ./...
+          git diff --exit-code || (echo "Please generate assembly by running 'go generate ./...'" && false)
 
       - name: Build
         run: go build -v ./...
