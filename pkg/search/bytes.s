@@ -17,11 +17,14 @@ memcmp_loop:
 	JE   equal
 	MOVB (DX), SI
 	CMPB (AX), SI
+	JNE  not_equal
 	ADDQ $0x01, AX
 	DECQ CX
 	ADDQ $0x01, DX
 	DECQ BX
 	JMP  memcmp_loop
+
+not_equal:
 	MOVB $0x00, ret+48(FP)
 	RET
 

@@ -39,10 +39,7 @@ func memcmp(x, y gotypes.Component) {
 
 	MOVB(Mem{Base: yPtr}, r)
 	CMPB(Mem{Base: xPtr}, r)
-
-	/*
-	JMP(LabelRef("not_equal"))
-	*/
+	JNE(LabelRef("not_equal"))
 
 	ADDQ(Imm(1), xPtr)
 	DECQ(xLen)
