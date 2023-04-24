@@ -1,17 +1,18 @@
 //go:build ignore
 
-package main 
+package main
 
 import (
 	. "github.com/mmcloughlin/avo/build"
-	//. "github.com/mmcloughlin/avo/operand"
+	"github.com/mmcloughlin/avo/gotypes"
+	. "github.com/mmcloughlin/avo/operand"
 )
 
 func main() {
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
 	Doc("Search checks if haystack contains needle.")
-	//h := Load(Param("haystack").Len(), GP64())
-	//n := Load(Param("needle").Len(), GP64())
+
+	memcmp(Param("haystack"), Param("needle"))
 
 	r := GP8()
 	ORB(r, r)
@@ -19,4 +20,25 @@ func main() {
 	Store(r, ReturnIndex(0))
 	RET()
 	Generate()
+}
+
+func memcmp(x, y gotypes.Component) {
+	Comment("compare two slices")
+
+	xPtr := Load(x.Base(), GP64())
+	xLen:= Load(x.Len(), GP64())
+	yPtr := Load(y.Base(), GP64())
+	yLen:= Load(y.Len(), GP64())
+
+
+	Label("loop")
+
+	CMPQ(xLen, Imm(0))
+	JE(LabelRef("done"))
+	CMPQ(yLen, Imm(0))
+	JE(LabelRef("done"))
+
+	CMPQ(Mem{})
+
+	Label("done")
 }
