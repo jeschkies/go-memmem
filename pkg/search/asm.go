@@ -14,11 +14,6 @@ func main() {
 
 	memcmp(Param("haystack"), Param("needle"))
 
-	r := GP8()
-	ORB(r, r)
-
-	Store(r, ReturnIndex(0))
-	RET()
 	Generate()
 }
 
@@ -30,15 +25,44 @@ func memcmp(x, y gotypes.Component) {
 	yPtr := Load(y.Base(), GP64())
 	yLen:= Load(y.Len(), GP64())
 
+	ret, _ := ReturnIndex(0).Resolve()
 
-	Label("loop")
+	// TODO: compare more than one byte at a time.
+	r := GP8()
+
+	Label("memcmp_loop")
 
 	CMPQ(xLen, Imm(0))
-	JE(LabelRef("done"))
+	JE(LabelRef("equal"))
 	CMPQ(yLen, Imm(0))
-	JE(LabelRef("done"))
+	JE(LabelRef("equal"))
 
-	CMPQ(Mem{})
+	MOVB(Mem{Base: yPtr}, r)
+	CMPB(Mem{Base: xPtr}, r)
 
-	Label("done")
+	/*
+	JMP(LabelRef("not_equal"))
+	*/
+
+	ADDQ(Imm(1), xPtr)
+	DECQ(xLen)
+	ADDQ(Imm(1), yPtr)
+	DECQ(yLen)
+	JMP(LabelRef("memcmp_loop"))
+
+	//Label("done")
+
+	/*
+	Comment("check if both are done")
+	CMPQ(xLen, yLen)	
+	JE(LabelRef("equal"))
+	*/
+
+	Label("not_equal")
+	MOVB(U8(0), ret.Addr)
+	RET()
+
+	Label("equal")
+	MOVB(U8(1), ret.Addr)
+	RET()
 }

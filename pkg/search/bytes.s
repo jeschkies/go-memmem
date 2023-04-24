@@ -4,6 +4,27 @@
 
 // func Search(haystack []byte, needle []byte) bool
 TEXT ·Search(SB), NOSPLIT, $0-49
-	ORB  AL, AL
-	MOVB AL, ret+48(FP)
+	// compare two slices
+	MOVQ haystack_base+0(FP), AX
+	MOVQ haystack_len+8(FP), CX
+	MOVQ needle_base+24(FP), DX
+	MOVQ needle_len+32(FP), BX
+
+memcmp_loop:
+	CMPQ CX, $0x00
+	JE   equal
+	CMPQ BX, $0x00
+	JE   equal
+	MOVB (DX), SI
+	CMPB (AX), SI
+	ADDQ $0x01, AX
+	DECQ CX
+	ADDQ $0x01, DX
+	DECQ BX
+	JMP  memcmp_loop
+	MOVB $0x00, ret+48(FP)
+	RET
+
+equal:
+	MOVB $0x01, ret+48(FP)
 	RET
