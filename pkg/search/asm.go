@@ -6,22 +6,49 @@ import (
 	. "github.com/mmcloughlin/avo/build"
 	"github.com/mmcloughlin/avo/gotypes"
 	. "github.com/mmcloughlin/avo/operand"
+	"github.com/mmcloughlin/avo/reg"
 )
 
 func main() {
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
 	Doc("Search checks if haystack contains needle.")
 
-	memcmp(Param("haystack"), Param("needle"))
+	nPtr := Load(Param("needle").Base(), GP64())
+	nLen:= Load(Param("needle").Len(), GP64())
+
+	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
+	first := YMM()
+	last := YMM()
+	VPBROADCASTB(NewParamAddr("needle", 0), first)
+	k := GP64()
+	MOVQ(NewParamAddr("needle", 0), k)
+	ADDQ(nLen, k)
+	DECQ(k)
+	VPBROADCASTB(Mem{Base: k}, last)
+
+	block_first := YMM()
+	block_last := YMM()
+	VMOVDQU(Mem{Base: nPtr}, block_first)
+	VMOVDQU(Mem{Base: nPtr}, block_last)
+
+	eq_first := YMM()
+	eq_last := YMM()
+
+	VPCMPEQB(first, block_first, eq_first)
+	VPCMPEQB(last, block_last, eq_last)
+
+	mask := YMM()
+	VPAND(eq_first, eq_last, mask)
+	VPMOVMSKB(mask)
+
+	inline_memcmp(Param("haystack"), nPtr, nLen)
 
 	Generate()
 }
 
-func memcmp(x, y gotypes.Component) {
+func inline_memcmp(y gotypes.Component, xPtr, xLen reg.Register) {
 	Comment("compare two slices")
 
-	xPtr := Load(x.Base(), GP64())
-	xLen:= Load(x.Len(), GP64())
 	yPtr := Load(y.Base(), GP64())
 	yLen:= Load(y.Len(), GP64())
 

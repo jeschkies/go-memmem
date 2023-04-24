@@ -19,6 +19,7 @@ func TestSimpleSearch(t *testing.T) {
 		{[]byte(`foobar`), []byte(`foobar`), true},
 		{[]byte(`foo`), []byte(`foobar`), false},
 		{[]byte(`foobar`), []byte(`foo`), false},
+		{[]byte(`a cat tries`), []byte(`cat`), true},
 	} {
 		tt := tt
 		t.Run(fmt.Sprintf("`%s` in `%s`", tt.needle, tt.haystack), func(t *testing.T) {

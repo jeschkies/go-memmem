@@ -3,12 +3,24 @@
 #include "textflag.h"
 
 // func Search(haystack []byte, needle []byte) bool
+// Requires: AVX, AVX2
 TEXT ·Search(SB), NOSPLIT, $0-49
+	MOVQ         needle_base+24(FP), AX
+	MOVQ         needle_len+32(FP), CX
+	VPBROADCASTB needle+0(FP), Y0
+	MOVQ         needle+0(FP), DX
+	ADDQ         CX, DX
+	DECQ         DX
+	VPBROADCASTB (DX), Y1
+	VMOVDQU      (AX), Y2
+	VMOVDQU      (AX), Y3
+	VPCMPEQB     Y0, Y2, Y0
+	VPCMPEQB     Y1, Y3, Y1
+	VPAND        Y0, Y1, Y0
+
 	// compare two slices
-	MOVQ haystack_base+0(FP), AX
-	MOVQ haystack_len+8(FP), CX
-	MOVQ needle_base+24(FP), DX
-	MOVQ needle_len+32(FP), BX
+	MOVQ haystack_base+0(FP), DX
+	MOVQ haystack_len+8(FP), BX
 
 memcmp_loop:
 	CMPQ CX, $0x00
