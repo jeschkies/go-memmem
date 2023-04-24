@@ -12,9 +12,9 @@ TEXT ·Search(SB), NOSPLIT, $0-49
 
 memcmp_loop:
 	CMPQ CX, $0x00
-	JE   equal
+	JE   done
 	CMPQ BX, $0x00
-	JE   equal
+	JE   done
 	MOVB (DX), SI
 	CMPB (AX), SI
 	JNE  not_equal
@@ -23,6 +23,11 @@ memcmp_loop:
 	ADDQ $0x01, DX
 	DECQ BX
 	JMP  memcmp_loop
+
+done:
+	// check if both are done
+	CMPQ CX, BX
+	JE   equal
 
 not_equal:
 	MOVB $0x00, ret+48(FP)

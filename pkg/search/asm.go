@@ -33,9 +33,9 @@ func memcmp(x, y gotypes.Component) {
 	Label("memcmp_loop")
 
 	CMPQ(xLen, Imm(0))
-	JE(LabelRef("equal"))
+	JE(LabelRef("done"))
 	CMPQ(yLen, Imm(0))
-	JE(LabelRef("equal"))
+	JE(LabelRef("done"))
 
 	MOVB(Mem{Base: yPtr}, r)
 	CMPB(Mem{Base: xPtr}, r)
@@ -47,13 +47,10 @@ func memcmp(x, y gotypes.Component) {
 	DECQ(yLen)
 	JMP(LabelRef("memcmp_loop"))
 
-	//Label("done")
-
-	/*
+	Label("done")
 	Comment("check if both are done")
 	CMPQ(xLen, yLen)	
 	JE(LabelRef("equal"))
-	*/
 
 	Label("not_equal")
 	MOVB(U8(0), ret.Addr)
