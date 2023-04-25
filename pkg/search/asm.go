@@ -4,7 +4,6 @@ package main
 
 import (
 	. "github.com/mmcloughlin/avo/build"
-	"github.com/mmcloughlin/avo/gotypes"
 	. "github.com/mmcloughlin/avo/operand"
 	"github.com/mmcloughlin/avo/reg"
 )
@@ -38,7 +37,7 @@ func main() {
 	CMPQ(ptr, maxPtr)
 	JG(LabelRef("chunk_loop_end"))
 
-	inline_find_in_chunk(first, last, ptr, needlePtr)
+	inline_find_in_chunk(first, last, ptr, needlePtr, needleLen)
 
 	// ptr += 32 // size of YMM == 256bit
 	ADDQ(Imm(32), ptr)
@@ -46,13 +45,10 @@ func main() {
 
 	Label("chunk_loop_end")
 
-	// TODO: move into loop
-	inline_memcmp(Param("haystack"), needlePtr, needleLen)
-
 	Generate()
 }
 
-func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr reg.Register) {
+func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) {
 	block_first := YMM()
 	block_last := YMM()
 
@@ -72,61 +68,59 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr reg.Registe
 	match_offset := GP32()
 	VPMOVMSKB(mask, match_offset)
 
+ 	// while match_offset != 0	
 	Label("mask_loop")
 	CMPL(match_offset, Imm(0))
 	JE(LabelRef("mask_loop_done"))
 
 	pos := GP32()
-
- 	// while match_offset != 0	
 	TZCNTL(match_offset, pos)
+	// Reset chunkPtr for each position in match offset
+	chunkPtr := GP64(); MOVQ(ptr, chunkPtr)
+	// TODO: there might be a better way to cast
+	pos64 := GP64(); MOVQ(pos, pos64)
+	ADDQ(pos64, chunkPtr)
 
-	// TODO: get chunk and compare 
-	//inline_memcmp(Param("haystack"), needlePtr, needleLen)
+	inline_memcmp(chunkPtr, needlePtr, needleLen)
+
+	// update match offset
 
 	JMP(LabelRef("mask_loop"))
 
 	Label("mask_loop_done")
 }
 
-func inline_memcmp(y gotypes.Component, xPtr, xLen reg.Register) {
+func inline_memcmp(xPtr, yPtr, size reg.Register) {
 	Comment("compare two slices")
 
-	yPtr := Load(y.Base(), GP64())
-	yLen:= Load(y.Len(), GP64())
-
-	ret, _ := ReturnIndex(0).Resolve()
-
+	i := GP64(); MOVQ(size, i)
+	x := GP64(); MOVQ(xPtr, x)
+	y := GP64(); MOVQ(yPtr, y)
 	// TODO: compare more than one byte at a time.
 	r := GP8()
 
+	ret, _ := ReturnIndex(0).Resolve()
+
 	Label("memcmp_loop")
 
-	CMPQ(xLen, Imm(0))
-	JE(LabelRef("done"))
-	CMPQ(yLen, Imm(0))
-	JE(LabelRef("done"))
+	CMPQ(i, Imm(0))
+	JE(LabelRef("memcmp_loop_done"))
 
-	MOVB(Mem{Base: yPtr}, r)
-	CMPB(Mem{Base: xPtr}, r)
+	MOVB(Mem{Base: y}, r)
+	CMPB(Mem{Base: x}, r)
 	JNE(LabelRef("not_equal"))
 
-	ADDQ(Imm(1), xPtr)
-	DECQ(xLen)
-	ADDQ(Imm(1), yPtr)
-	DECQ(yLen)
+	ADDQ(Imm(1), x)
+	ADDQ(Imm(1), y)
+	DECQ(i)
 	JMP(LabelRef("memcmp_loop"))
 
-	Label("done")
-	Comment("check if both are done")
-	CMPQ(xLen, yLen)	
-	JE(LabelRef("equal"))
-
-	Label("not_equal")
-	MOVB(U8(0), ret.Addr)
-	RET()
+	Label("memcmp_loop_done")
 
 	Label("equal")
 	MOVB(U8(1), ret.Addr)
 	RET()
+
+	// do not return anything
+	Label("not_equal")
 }
