@@ -3,21 +3,37 @@
 #include "textflag.h"
 
 // func Search(haystack []byte, needle []byte) bool
-// Requires: AVX, AVX2
+// Requires: AVX, AVX2, BMI
 TEXT ·Search(SB), NOSPLIT, $0-49
-	MOVQ         needle_base+24(FP), AX
-	MOVQ         needle_len+32(FP), CX
-	VPBROADCASTB needle+0(FP), Y0
-	MOVQ         needle+0(FP), DX
-	ADDQ         CX, DX
-	DECQ         DX
-	VPBROADCASTB (DX), Y1
-	VMOVDQU      (AX), Y2
-	VMOVDQU      (AX), Y3
-	VPCMPEQB     Y0, Y2, Y0
-	VPCMPEQB     Y1, Y3, Y1
-	VPAND        Y0, Y1, Y0
+	MOVQ needle_base+24(FP), AX
+	MOVQ needle_len+32(FP), CX
+	MOVQ haystack_base+0(FP), DX
+	MOVQ haystack_len+8(FP), BX
+	SUBQ CX, BX
 
+	// create vector filled with first and last character
+	VPBROADCASTB needle+0(FP), Y0
+	MOVQ         needle+0(FP), SI
+	ADDQ         CX, SI
+	DECQ         SI
+	VPBROADCASTB (SI), Y1
+
+chunk_loop:
+	CMPQ DX, BX
+	JG   chunk_loop_end
+
+	// compare blocks against first and last character
+	VMOVDQU   (AX), Y2
+	VMOVDQU   (AX), Y3
+	VPCMPEQB  Y0, Y2, Y2
+	VPCMPEQB  Y1, Y3, Y3
+	VPAND     Y2, Y3, Y2
+	VPMOVMSKB Y2, SI
+	TZCNTL    SI, SI
+	ADDQ      $0x20, DX
+	JMP       chunk_loop
+
+chunk_loop_end:
 	// compare two slices
 	MOVQ haystack_base+0(FP), DX
 	MOVQ haystack_len+8(FP), BX

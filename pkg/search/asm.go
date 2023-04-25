@@ -13,23 +13,37 @@ func main() {
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
 	Doc("Search checks if haystack contains needle.")
 
-	nPtr := Load(Param("needle").Base(), GP64())
-	nLen:= Load(Param("needle").Len(), GP64())
+	needlePtr := Load(Param("needle").Base(), GP64())
+	needleLen:= Load(Param("needle").Len(), GP64())
+
+	startPtr := Load(Param("haystack").Base(), GP64())
+	endPtr := Load(Param("haystack").Len(), GP64())
+	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(needleLen, maxPtr)
+	ptr := GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
+	Comment("create vector filled with first and last character")
 	first := YMM()
 	last := YMM()
 	VPBROADCASTB(NewParamAddr("needle", 0), first)
 	k := GP64()
 	MOVQ(NewParamAddr("needle", 0), k)
-	ADDQ(nLen, k)
+	ADDQ(needleLen, k)
 	DECQ(k)
 	VPBROADCASTB(Mem{Base: k}, last)
 
 	block_first := YMM()
 	block_last := YMM()
-	VMOVDQU(Mem{Base: nPtr}, block_first)
-	VMOVDQU(Mem{Base: nPtr}, block_last)
+
+	Label("chunk_loop")
+
+	// whil ptr <= max_ptr
+	CMPQ(ptr, maxPtr)
+	JG(LabelRef("chunk_loop_end"))
+
+	Comment("compare blocks against first and last character")
+	VMOVDQU(Mem{Base: needlePtr}, block_first)
+	VMOVDQU(Mem{Base: needlePtr}, block_last)
 
 	eq_first := YMM()
 	eq_last := YMM()
@@ -39,9 +53,22 @@ func main() {
 
 	mask := YMM()
 	VPAND(eq_first, eq_last, mask)
-	VPMOVMSKB(mask)
+	match_offset := GP32()
+	VPMOVMSKB(mask, match_offset)
 
-	inline_memcmp(Param("haystack"), nPtr, nLen)
+	pos := GP32()
+
+ 	// while match_offset != 0	
+	TZCNTL(match_offset, pos)
+
+	// ptr += 32 // size of YMM == 256bit
+	ADDQ(Imm(32), ptr)
+	JMP(LabelRef("chunk_loop"))
+
+	Label("chunk_loop_end")
+
+	// TODO: move into loop
+	inline_memcmp(Param("haystack"), needlePtr, needleLen)
 
 	Generate()
 }
