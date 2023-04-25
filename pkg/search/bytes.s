@@ -23,15 +23,24 @@ chunk_loop:
 	JG   chunk_loop_end
 
 	// compare blocks against first and last character
-	VMOVDQU   (AX), Y2
-	VMOVDQU   (AX), Y3
-	VPCMPEQB  Y0, Y2, Y2
-	VPCMPEQB  Y1, Y3, Y3
+	VMOVDQU  (AX), Y2
+	VMOVDQU  (AX), Y3
+	VPCMPEQB Y0, Y2, Y2
+	VPCMPEQB Y1, Y3, Y3
+
+	// create mask and determine position
 	VPAND     Y2, Y3, Y2
 	VPMOVMSKB Y2, SI
-	TZCNTL    SI, SI
-	ADDQ      $0x20, DX
-	JMP       chunk_loop
+
+mask_loop:
+	CMPL   SI, $0x00
+	JE     mask_loop_done
+	TZCNTL SI, DI
+	JMP    mask_loop
+
+mask_loop_done:
+	ADDQ $0x20, DX
+	JMP  chunk_loop
 
 chunk_loop_end:
 	// compare two slices

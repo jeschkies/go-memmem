@@ -32,34 +32,13 @@ func main() {
 	DECQ(k)
 	VPBROADCASTB(Mem{Base: k}, last)
 
-	block_first := YMM()
-	block_last := YMM()
-
 	Label("chunk_loop")
 
-	// whil ptr <= max_ptr
+	// while ptr <= max_ptr
 	CMPQ(ptr, maxPtr)
 	JG(LabelRef("chunk_loop_end"))
 
-	Comment("compare blocks against first and last character")
-	VMOVDQU(Mem{Base: needlePtr}, block_first)
-	VMOVDQU(Mem{Base: needlePtr}, block_last)
-
-	eq_first := YMM()
-	eq_last := YMM()
-
-	VPCMPEQB(first, block_first, eq_first)
-	VPCMPEQB(last, block_last, eq_last)
-
-	mask := YMM()
-	VPAND(eq_first, eq_last, mask)
-	match_offset := GP32()
-	VPMOVMSKB(mask, match_offset)
-
-	pos := GP32()
-
- 	// while match_offset != 0	
-	TZCNTL(match_offset, pos)
+	inline_find_in_chunk(first, last, ptr, needlePtr)
 
 	// ptr += 32 // size of YMM == 256bit
 	ADDQ(Imm(32), ptr)
@@ -71,6 +50,43 @@ func main() {
 	inline_memcmp(Param("haystack"), needlePtr, needleLen)
 
 	Generate()
+}
+
+func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr reg.Register) {
+	block_first := YMM()
+	block_last := YMM()
+
+	Comment("compare blocks against first and last character")
+	VMOVDQU(Mem{Base: needlePtr}, block_first)
+	VMOVDQU(Mem{Base: needlePtr}, block_last)
+
+	eq_first := YMM()
+	eq_last := YMM()
+
+	VPCMPEQB(first, block_first, eq_first)
+	VPCMPEQB(last, block_last, eq_last)
+
+	Comment("create mask and determine position")
+	mask := YMM()
+	VPAND(eq_first, eq_last, mask)
+	match_offset := GP32()
+	VPMOVMSKB(mask, match_offset)
+
+	Label("mask_loop")
+	CMPL(match_offset, Imm(0))
+	JE(LabelRef("mask_loop_done"))
+
+	pos := GP32()
+
+ 	// while match_offset != 0	
+	TZCNTL(match_offset, pos)
+
+	// TODO: get chunk and compare 
+	//inline_memcmp(Param("haystack"), needlePtr, needleLen)
+
+	JMP(LabelRef("mask_loop"))
+
+	Label("mask_loop_done")
 }
 
 func inline_memcmp(y gotypes.Component, xPtr, xLen reg.Register) {
