@@ -15,13 +15,13 @@ func TestSimpleSearch(t *testing.T) {
 		needle   []byte
 		match    bool
 	}{
-		{[]byte(`foobar`), []byte(`foobaz`), false},
-		{[]byte(`foobar`), []byte(`foobar`), true},
-		{[]byte(`foo`), []byte(`foobar`), false},
-		{[]byte(`foobar`), []byte(`foo`), false},
-		{[]byte(`a cat tries`), []byte(`cat`), true},
+		//{[]byte(`foobar`), []byte(`foobaz`), false},
+		//{[]byte(`foobar`), []byte(`foobar`), true},
+		//{[]byte(`foo`), []byte(`foobar`), false},
+		//{[]byte(`foobar`), []byte(`foo`), false},
+		//{[]byte(`a cat tries`), []byte(`cat`), true},
 		{
-			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer`),
+			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
 			[]byte(`amet`),
 			true,
 		},

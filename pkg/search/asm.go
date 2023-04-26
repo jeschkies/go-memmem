@@ -8,6 +8,8 @@ import (
 	"github.com/mmcloughlin/avo/reg"
 )
 
+const MIN_HAYSTACK = 32
+
 func main() {
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
 	Doc("Search checks if haystack contains needle.")
@@ -16,8 +18,10 @@ func main() {
 	needleLen:= Load(Param("needle").Len(), GP64())
 
 	startPtr := Load(Param("haystack").Base(), GP64())
-	endPtr := Load(Param("haystack").Len(), GP64())
-	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(needleLen, maxPtr)
+	haystackLen, _ := Param("haystack").Len().Resolve()
+	
+	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
+	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
 	ptr := GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47

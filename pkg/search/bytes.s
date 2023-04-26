@@ -9,7 +9,7 @@ TEXT ·Search(SB), NOSPLIT, $0-49
 	MOVQ needle_len+32(FP), CX
 	MOVQ haystack_base+0(FP), DX
 	MOVQ haystack_len+8(FP), BX
-	SUBQ CX, BX
+	SUBQ $0x20, BX
 
 	// create vector filled with first and last character
 	VPBROADCASTB needle+0(FP), Y0
