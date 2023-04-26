@@ -58,10 +58,13 @@ func main() {
 func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) {
 	block_first := YMM()
 	block_last := YMM()
+	// ptr + needleLen -1
+	block_last_start := GP64(); MOVQ(ptr, block_last_start)
+	ADDQ(needleLen, block_last_start); DECQ(block_last_start)
 
 	Comment("compare blocks against first and last character")
-	VMOVDQU(Mem{Base: needlePtr}, block_first)
-	VMOVDQU(Mem{Base: needlePtr}, block_last)
+	VMOVDQU(Mem{Base: ptr}, block_first)
+	VMOVDQU(Mem{Base: block_last_start}, block_last)
 
 	eq_first := YMM()
 	eq_last := YMM()

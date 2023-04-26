@@ -8,7 +8,8 @@ TEXT ·Search(SB), NOSPLIT, $0-49
 	MOVQ needle_base+24(FP), AX
 	MOVQ needle_len+32(FP), CX
 	MOVQ haystack_base+0(FP), DX
-	MOVQ haystack_len+8(FP), BX
+	MOVQ DX, BX
+	ADDQ haystack_len+8(FP), BX
 	SUBQ $0x20, BX
 
 	// create vector filled with first and last character
@@ -21,10 +22,13 @@ TEXT ·Search(SB), NOSPLIT, $0-49
 chunk_loop:
 	CMPQ DX, BX
 	JG   chunk_loop_end
+	MOVQ DX, SI
+	ADDQ CX, SI
+	DECQ SI
 
 	// compare blocks against first and last character
-	VMOVDQU  (AX), Y2
-	VMOVDQU  (AX), Y3
+	VMOVDQU  (DX), Y2
+	VMOVDQU  (SI), Y3
 	VPCMPEQB Y0, Y2, Y2
 	VPCMPEQB Y1, Y3, Y3
 
