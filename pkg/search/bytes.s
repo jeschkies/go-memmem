@@ -2,6 +2,17 @@
 
 #include "textflag.h"
 
+// func Mask(first byte, haystack []byte) int32
+// Requires: AVX, AVX2
+TEXT ·Mask(SB), NOSPLIT, $0-36
+	MOVQ         haystack_base+8(FP), AX
+	VPBROADCASTB first+0(FP), Y0
+	VMOVDQU      (AX), Y1
+	VPCMPEQB     Y0, Y1, Y0
+	VPMOVMSKB    Y0, AX
+	MOVL         AX, ret+32(FP)
+	RET
+
 // func Search(haystack []byte, needle []byte) bool
 // Requires: AVX, AVX2, BMI
 TEXT ·Search(SB), NOSPLIT, $0-49

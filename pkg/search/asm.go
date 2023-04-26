@@ -11,6 +11,20 @@ import (
 const MIN_HAYSTACK = 32
 
 func main() {
+	TEXT("Mask", NOSPLIT, "func(first byte, haystack []byte) int32")
+	f := YMM()
+	b := YMM()
+	m := YMM()
+	param, _ := Param("first").Resolve()
+	p := Load(Param("haystack").Base(), GP64())
+	VPBROADCASTB(param.Addr, f)
+	VMOVDQU(Mem{Base: p}, b)
+	VPCMPEQB(f, b, m)
+	o := GP32()
+	VPMOVMSKB(m, o)
+	Store(o, ReturnIndex(0))
+	RET()
+
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
 	Doc("Search checks if haystack contains needle.")
 

@@ -2,5 +2,7 @@
 
 package search
 
+func Mask(first byte, haystack []byte) int32
+
 // Search checks if haystack contains needle.
 func Search(haystack []byte, needle []byte) bool

@@ -3,6 +3,7 @@ package search
 import (
 	"fmt"
 	"testing"
+	"strconv"
 
 	"github.com/stretchr/testify/require"
 )
@@ -32,4 +33,16 @@ func TestSimpleSearch(t *testing.T) {
 			require.Equal(t, tt.match, r)
 		})
 	}
+}
+
+func TestMask(t *testing.T) {
+	first := byte(4)
+	array := [32]byte{
+		0, 4, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0,
+	}
+	mask := Mask(first, array[:])
+	require.Equal(t, "10", strconv.FormatInt(int64(mask), 2))
 }
