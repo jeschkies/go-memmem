@@ -78,7 +78,8 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	// Reset chunkPtr for each position in match offset
 	chunkPtr := GP64(); MOVQ(ptr, chunkPtr)
 	// TODO: there might be a better way to cast
-	pos64 := GP64(); MOVQ(pos, pos64)
+	pos64 := GP64()
+	MOVLQSX(pos, pos64)
 	ADDQ(pos64, chunkPtr)
 
 	inline_memcmp(chunkPtr, needlePtr, needleLen)
