@@ -44,6 +44,9 @@ func main() {
 	JMP(LabelRef("chunk_loop"))
 
 	Label("chunk_loop_end")
+	ret, _ := ReturnIndex(0).Resolve()
+	MOVB(U8(0), ret.Addr)
+	RET()
 
 	Generate()
 }
