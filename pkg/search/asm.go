@@ -80,14 +80,15 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	TZCNTL(match_offset, pos)
 	// Reset chunkPtr for each position in match offset
 	chunkPtr := GP64(); MOVQ(ptr, chunkPtr)
-	// TODO: there might be a better way to cast
-	pos64 := GP64()
-	MOVLQSX(pos, pos64)
-	ADDQ(pos64, chunkPtr)
+	ADDQ(pos.As64(), chunkPtr)
 
 	inline_memcmp(chunkPtr, needlePtr, needleLen)
 
-	// update match offset
+	// update match offset: match_offset = match_offset & (match_offset -1)
+	match_offset_b := GP32(); MOVL(match_offset, match_offset_b)
+	DECL(match_offset_b)
+	ANDL(match_offset_b, match_offset)
+
 
 	JMP(LabelRef("mask_loop"))
 
@@ -107,24 +108,23 @@ func inline_memcmp(xPtr, yPtr, size reg.Register) {
 
 	Label("memcmp_loop")
 
+	Comment("the loop is done; the chunks must be equal")
 	CMPQ(i, Imm(0))
-	JE(LabelRef("memcmp_loop_done"))
+	JE(LabelRef("memcmp_equal"))
 
 	MOVB(Mem{Base: y}, r)
 	CMPB(Mem{Base: x}, r)
-	JNE(LabelRef("not_equal"))
+	JNE(LabelRef("memcmp_not_equal"))
 
 	ADDQ(Imm(1), x)
 	ADDQ(Imm(1), y)
 	DECQ(i)
 	JMP(LabelRef("memcmp_loop"))
 
-	Label("memcmp_loop_done")
-
-	Label("equal")
+	Label("memcmp_equal")
 	MOVB(U8(1), ret.Addr)
 	RET()
 
 	// do not return anything
-	Label("not_equal")
+	Label("memcmp_not_equal")
 }

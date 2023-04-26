@@ -33,34 +33,37 @@ chunk_loop:
 	VPMOVMSKB Y2, SI
 
 mask_loop:
-	CMPL    SI, $0x00
-	JE      mask_loop_done
-	TZCNTL  SI, DI
-	MOVQ    DX, R8
-	MOVLQSX DI, DI
-	ADDQ    DI, R8
+	CMPL   SI, $0x00
+	JE     mask_loop_done
+	TZCNTL SI, DI
+	MOVQ   DX, R8
+	ADDQ   DI, R8
 
 	// compare two slices
 	MOVQ CX, DI
 	MOVQ AX, R9
 
 memcmp_loop:
+	// the loop is done; the chunks must be equal
 	CMPQ DI, $0x00
-	JE   memcmp_loop_done
+	JE   memcmp_equal
 	MOVB (R9), R10
 	CMPB (R8), R10
-	JNE  not_equal
+	JNE  memcmp_not_equal
 	ADDQ $0x01, R8
 	ADDQ $0x01, R9
 	DECQ DI
 	JMP  memcmp_loop
 
-memcmp_loop_done:
+memcmp_equal:
 	MOVB $0x01, ret+48(FP)
 	RET
 
-not_equal:
-	JMP mask_loop
+memcmp_not_equal:
+	MOVL SI, DI
+	DECL DI
+	ANDL DI, SI
+	JMP  mask_loop
 
 mask_loop_done:
 	ADDQ $0x20, DX
