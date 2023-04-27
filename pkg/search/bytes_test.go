@@ -37,12 +37,12 @@ func TestSimpleSearch(t *testing.T) {
 func TestMask(t *testing.T) {
 	needle := []byte{4, 1, 3}
 	array := [32]byte{
-		0, 0, 0, 4, 1, 3, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 4, 2, 3, 0, 0,
+		0, 4, 1, 3, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0,
 	}
 	found := Mask(needle, array[:])
-	require.Equal(t, true, found)
-	//require.Equal(t, int64(3), position)
+	//require.Equal(t, true, found)
+	require.Equal(t, int64(9), found)
 }

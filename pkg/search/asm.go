@@ -11,7 +11,7 @@ import (
 const MIN_HAYSTACK = 32
 
 func main() {
-	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) bool")
+	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) int64")
 	f := YMM()
 	l := YMM()
 	chunk0 := YMM()
@@ -31,7 +31,7 @@ func main() {
 	VMOVDQU(Mem{Base: c0}, chunk0)
 	VMOVDQU(Mem{Base: c1}, chunk1)
 
-	// compare first and last character with chunk0
+	// compare first and last character with chunk0 and chunk1
 	eq0 := YMM()
 	eq1 := YMM()
 	VPCMPEQB(f, chunk0, eq0)
@@ -47,12 +47,15 @@ func main() {
 	XORQ(position.As64(), position.As64())
 	TZCNTL(o, position)
 
-	chunkPtr := GP64(); MOVQ(c0, chunkPtr)
-	ADDQ(position.As64(), chunkPtr)
+	//chunkPtr := GP64(); MOVQ(c0, chunkPtr)
+	//ADDQ(position.As64(), chunkPtr)
 
-	inline_memcmp(chunkPtr, needle0, neeldeLen)
+	//inline_memcmp(chunkPtr, needle0, neeldeLen)
 
-	//Store(position.As64(), ReturnIndex(0))
+	inline_clear_leftmost_set(o)
+	TZCNTL(o, position)
+
+	Store(position.As64(), ReturnIndex(0))
 	RET()
 
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
@@ -135,15 +138,23 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 
 	inline_memcmp(chunkPtr, needlePtr, needleLen)
 
-	// update match offset: match_offset = match_offset & (match_offset -1)
+	// clear left most bit of match offset:
+	// match_offset = match_offset & (match_offset -1)
 	match_offset_b := GP32(); MOVL(match_offset, match_offset_b)
 	DECL(match_offset_b)
 	ANDL(match_offset_b, match_offset)
 
-
 	JMP(LabelRef("mask_loop"))
 
 	Label("mask_loop_done")
+}
+
+// inline_clear_leftmost_set clears the left most non-zero bit of mask
+func inline_clear_leftmost_set(mask reg.Register) {
+	// mask = mask & (mask -1)
+	tmp := GP32(); MOVL(mask, tmp)
+	DECL(tmp)
+	ANDL(tmp, mask)
 }
 
 func inline_memcmp(xPtr, yPtr, size reg.Register) {
