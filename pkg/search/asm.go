@@ -11,7 +11,8 @@ import (
 const MIN_HAYSTACK = 32
 
 func main() {
-	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) int64")
+	// Only generated for testing.
+	TEXT("findInChunk", NOSPLIT, "func(needle []byte, haystack []byte) int64")
 	f := YMM()
 	l := YMM()
 	ptr := Load(Param("haystack").Base(), GP64())
@@ -28,7 +29,6 @@ func main() {
 	//MOVQ(U64(10), r.Addr) // TODO: return -1
 
 	Store(offset, ReturnIndex(0))
-
 	RET()
 
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")

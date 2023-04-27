@@ -2,9 +2,9 @@
 
 #include "textflag.h"
 
-// func Mask(needle []byte, haystack []byte) int64
+// func findInChunk(needle []byte, haystack []byte) int64
 // Requires: AVX, AVX2, BMI
-TEXT ·Mask(SB), NOSPLIT, $0-56
+TEXT ·findInChunk(SB), NOSPLIT, $0-56
 	MOVQ         haystack_base+24(FP), AX
 	MOVQ         needle_len+8(FP), CX
 	DECQ         CX

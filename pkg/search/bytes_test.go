@@ -35,13 +35,54 @@ func TestSimpleSearch(t *testing.T) {
 }
 
 func TestMask(t *testing.T) {
-	needle := []byte{4, 1, 3}
-	array := [32]byte{
-		0, 0, 0, 4, 2, 3, 0, 0,
-		0, 4, 1, 3, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0,
+	for _, tt := range []struct {
+		name     string
+		needle   []byte
+		haystack [32]byte 
+		index    int64 
+	}{
+		{
+			"chunk second match",
+			[]byte{4, 1, 3},
+			[32]byte{
+				0, 0, 0, 4, 2, 3, 0, 0,
+				0, 4, 1, 3, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+			},
+			int64(9),
+		},
+		{
+			"chunk first match",
+			[]byte{4, 1, 3},
+			[32]byte{
+				0, 0, 0, 4, 1, 3, 0, 0,
+				0, 4, 1, 3, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+			},
+			int64(3),
+		},
+		{
+			"longer chunk",
+			[]byte{4, 1, 3, 3},
+			[32]byte{
+				0, 0, 0, 4, 1, 3, 0, 0,
+				0, 4, 1, 3, 3, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+			},
+			int64(9),
+		},
+	} {
+		tt := tt
+		t.Run(fmt.Sprintf(tt.name), func(t *testing.T) {
+			index := findInChunk(tt.needle, tt.haystack[:])
+			require.Equal(t, tt.index, index)
+			if index != -1 {
+				end := index + int64(len(tt.needle))
+				require.ElementsMatch(t, tt.needle, tt.haystack[index:end])
+			}
+		})
 	}
-	index := Mask(needle, array[:])
-	require.Equal(t, int64(9), index)
 }

@@ -2,7 +2,7 @@
 
 package search
 
-func Mask(needle []byte, haystack []byte) int64
+func findInChunk(needle []byte, haystack []byte) int64
 
 // Search checks if haystack contains needle.
 func Search(haystack []byte, needle []byte) bool
