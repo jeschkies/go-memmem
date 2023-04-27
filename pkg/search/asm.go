@@ -43,11 +43,10 @@ func main() {
 
 	// while ptr <= max_ptr
 	CMPQ(ptr, maxPtr)
-	CMPQ(ptr, endPtr)
 	JG(LabelRef("chunk_loop_end"))
 
-	o := inline_find_in_chunk(first, last, startPtr, needlePtr, needleLenMain)
-	// TODO: break early
+	o := inline_find_in_chunk(first, last, ptr, needlePtr, needleLenMain)
+	// TODO: break early and update index.
 
 	// ptr += 32 // size of YMM == 256bit
 	ADDQ(Imm(32), ptr)

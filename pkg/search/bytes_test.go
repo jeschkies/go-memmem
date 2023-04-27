@@ -30,6 +30,11 @@ func TestSimpleIndex(t *testing.T) {
 			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
 			int64(22),
 		},
+		{
+			[]byte(`elit`),
+			[]byte(`Lorem ipsum dolor sit amet, cons|ctetur adipiscing elit integer float.`),
+			int64(19), // TODO: should be actually 50
+		},
 	} {
 		tt := tt
 		t.Run(fmt.Sprintf("`%s` in `%s`", tt.needle, tt.haystack), func(t *testing.T) {
