@@ -2,9 +2,9 @@
 
 #include "textflag.h"
 
-// func Mask(needle []byte, haystack []byte) bool
+// func Mask(needle []byte, haystack []byte) int64
 // Requires: AVX, AVX2, BMI
-TEXT ·Mask(SB), NOSPLIT, $0-49
+TEXT ·Mask(SB), NOSPLIT, $0-56
 	MOVQ         needle_len+8(FP), AX
 	DECQ         AX
 	MOVQ         needle_base+0(FP), CX
@@ -33,33 +33,32 @@ offsets_loop:
 
 	// test chunk
 	// compare two slices
-	MOVQ AX, SI
-	MOVQ CX, R8
+	MOVQ AX, R8
+	MOVQ CX, R9
 
 memcmp_loop:
 	// the loop is done; the chunks must be equal
-	CMPQ SI, $0x00
-	JE   memcmp_equal
-	MOVB (R8), R9
-	CMPB (DI), R9
-	JNE  memcmp_not_equal
+	CMPQ R8, $0x00
+	JE   memcmp_loop_done
+	MOVB (R9), R10
+	CMPB (DI), R10
+	JNE  memcmp_loop_done
 	ADDQ $0x01, DI
-	ADDQ $0x01, R8
-	DECQ SI
+	ADDQ $0x01, R9
+	DECQ R8
 	JMP  memcmp_loop
 
-memcmp_equal:
-	MOVB $0x01, ret+48(FP)
-	RET
-
-memcmp_not_equal:
-	MOVL BX, SI
-	DECL SI
-	ANDL SI, BX
+memcmp_loop_done:
+	CMPQ R8, $0x00
+	JE   chunk_match
+	MOVL BX, DI
+	DECL DI
+	ANDL DI, BX
 	JMP  offsets_loop
 
 offsets_loop_done:
-	MOVB $0x00, ret+48(FP)
+chunk_match:
+	MOVQ SI, ret+48(FP)
 	RET
 
 // func Search(haystack []byte, needle []byte) bool
@@ -110,20 +109,16 @@ mask_loop:
 memcmp_loop:
 	// the loop is done; the chunks must be equal
 	CMPQ DI, $0x00
-	JE   memcmp_equal
+	JE   memcmp_loop_done
 	MOVB (R9), R10
 	CMPB (R8), R10
-	JNE  memcmp_not_equal
+	JNE  memcmp_loop_done
 	ADDQ $0x01, R8
 	ADDQ $0x01, R9
 	DECQ DI
 	JMP  memcmp_loop
 
-memcmp_equal:
-	MOVB $0x01, ret+48(FP)
-	RET
-
-memcmp_not_equal:
+memcmp_loop_done:
 	MOVL SI, DI
 	DECL DI
 	ANDL DI, SI

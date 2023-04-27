@@ -11,7 +11,7 @@ import (
 const MIN_HAYSTACK = 32
 
 func main() {
-	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) bool")
+	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) int64")
 	f := YMM()
 	l := YMM()
 	chunk0 := YMM()
@@ -57,15 +57,21 @@ func main() {
 	ADDQ(offset.As64(), chunkPtr)
 
 	Comment("test chunk")
-	inline_memcmp(chunkPtr, needle0, neeldeLen)
+	cmpIndex := inline_memcmp(chunkPtr, needle0, neeldeLen)
+	CMPQ(cmpIndex, Imm(0))
+	JE(LabelRef("chunk_match"))
 
 	inline_clear_leftmost_set(offsets)
 	JMP(LabelRef("offsets_loop"))
 
 	Label("offsets_loop_done")
 
-	r, _ := ReturnIndex(0).Resolve()
-	MOVB(U8(0), r.Addr)
+	//r, _ := ReturnIndex(0).Resolve()
+	//MOVQ(U64(10), r.Addr) // TODO: return -1
+
+	Label("chunk_match")
+	Store(offset.As64(), ReturnIndex(0))
+
 	RET()
 
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
@@ -167,7 +173,9 @@ func inline_clear_leftmost_set(mask reg.Register) {
 	ANDL(tmp, mask)
 }
 
-func inline_memcmp(xPtr, yPtr, size reg.Register) {
+// inline_memcmp compares the bytes in xPtr and yPtr. The returned register is
+// the index where it left off. If it's 0 there's a match.
+func inline_memcmp(xPtr, yPtr, size reg.Register) reg.Register {
 	Comment("compare two slices")
 
 	i := GP64(); MOVQ(size, i)
@@ -176,27 +184,23 @@ func inline_memcmp(xPtr, yPtr, size reg.Register) {
 	// TODO: compare more than one byte at a time.
 	r := GP8()
 
-	ret, _ := ReturnIndex(0).Resolve()
-
 	Label("memcmp_loop")
 
 	Comment("the loop is done; the chunks must be equal")
 	CMPQ(i, Imm(0))
-	JE(LabelRef("memcmp_equal"))
+	JE(LabelRef("memcmp_loop_done"))
 
 	MOVB(Mem{Base: y}, r)
 	CMPB(Mem{Base: x}, r)
-	JNE(LabelRef("memcmp_not_equal"))
+	// Break early
+	JNE(LabelRef("memcmp_loop_done"))
 
 	ADDQ(Imm(1), x)
 	ADDQ(Imm(1), y)
 	DECQ(i)
 	JMP(LabelRef("memcmp_loop"))
 
-	Label("memcmp_equal")
-	MOVB(U8(1), ret.Addr)
-	RET()
-
 	// do not return anything
-	Label("memcmp_not_equal")
+	Label("memcmp_loop_done")
+	return i
 }
