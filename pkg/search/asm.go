@@ -13,18 +13,12 @@ const MIN_HAYSTACK = 32
 func main() {
 	// Only generated for testing.
 	TEXT("findInChunk", NOSPLIT, "func(needle []byte, haystack []byte) int64")
-	f := YMM()
-	l := YMM()
 	ptr := Load(Param("haystack").Base(), GP64())
-	neeldeLen := Load(Param("needle").Len(), GP64())
-	DECQ(neeldeLen)
-	needle0 := Load(Param("needle").Base(), GP64())
-	needle1 := GP64(); MOVQ(needle0, needle1);
-	ADDQ(neeldeLen, needle1)
-	VPBROADCASTB(Mem{Base: needle0}, f)
-	VPBROADCASTB(Mem{Base: needle1}, l)
+	neeldeLen := Load(Param("needle").Len(), GP64()); DECQ(neeldeLen)
+	needle := Load(Param("needle").Base(), GP64())
+	f, l := inline_splat(needle, neeldeLen)
 
-	offset := inline_find_in_chunk(f, l, ptr, needle0, neeldeLen)
+	offset := inline_find_in_chunk(f, l, ptr, needle, neeldeLen)
 	//r, _ := ReturnIndex(0).Resolve()
 	//MOVQ(U64(10), r.Addr) // TODO: return -1
 
@@ -73,6 +67,20 @@ func main() {
 	RET()
 
 	Generate()
+}
+
+// inline_splat fills one 256bit register with repeated first neelde char and
+// another with repeated last needle char.
+func inline_splat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtual) {
+	f := YMM()
+	l := YMM()
+
+	needle1 := GP64(); MOVQ(needle0, needle1);
+	ADDQ(needleLen, needle1)
+	VPBROADCASTB(Mem{Base: needle0}, f)
+	VPBROADCASTB(Mem{Base: needle1}, l)
+
+	return f, l
 }
 
 func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) reg.Register {
