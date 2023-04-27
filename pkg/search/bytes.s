@@ -25,7 +25,7 @@ TEXT ·findInChunk(SB), NOSPLIT, $0-56
 
 	// calculate offsets
 	VPMOVMSKB Y0, BX
-	XORQ      SI, SI
+	MOVQ      $-1, SI
 
 	// loop over offsets, ie bit positions
 offsets_loop:
@@ -55,12 +55,14 @@ memcmp_loop:
 memcmp_loop_done:
 	CMPQ R8, $0x00
 	JE   chunk_match
-	MOVL BX, DI
-	DECL DI
-	ANDL DI, BX
+	MOVL BX, SI
+	DECL SI
+	ANDL SI, BX
 	JMP  offsets_loop
 
 offsets_loop_done:
+	MOVQ $-1, SI
+
 chunk_match:
 	MOVQ SI, ret+48(FP)
 	RET
@@ -95,7 +97,7 @@ chunk_loop:
 
 	// calculate offsets
 	VPMOVMSKB Y2, DI
-	XORQ      SI, SI
+	MOVQ      $-1, SI
 
 	// loop over offsets, ie bit positions
 offsets_loop:
@@ -125,13 +127,17 @@ memcmp_loop:
 memcmp_loop_done:
 	CMPQ R9, $0x00
 	JE   chunk_match
-	MOVL DI, R8
-	DECL R8
-	ANDL R8, DI
+	MOVL DI, SI
+	DECL SI
+	ANDL SI, DI
 	JMP  offsets_loop
 
 offsets_loop_done:
+	MOVQ $-1, SI
+
 chunk_match:
+	CMPQ SI, $0x00
+	JGE  chunk_loop_end
 	ADDQ $0x20, DX
 	JMP  chunk_loop
 

@@ -46,13 +46,15 @@ func main() {
 	JG(LabelRef("chunk_loop_end"))
 
 	o := inline_find_in_chunk(first, last, ptr, needlePtr, needleLenMain)
-	// TODO: break early and update index.
+	CMPQ(o, Imm(0))
+	JGE(LabelRef("chunk_loop_end"))
 
 	// ptr += 32 // size of YMM == 256bit
 	ADDQ(Imm(32), ptr)
 	JMP(LabelRef("chunk_loop"))
 
 	Label("chunk_loop_end")
+	// TODO: update index.
 	ret, _ := ReturnIndex(0).Resolve()
 	MOVQ(o, ret.Addr)
 	RET()
@@ -99,7 +101,7 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	offsets := GP32()
 	VPMOVMSKB(mask, offsets)
 	offset := GP64()
-	XORQ(offset, offset)
+	MOVQ(I64(-1), offset)
 
 	Comment("loop over offsets, ie bit positions")
 	Label("offsets_loop")
@@ -121,9 +123,10 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	JMP(LabelRef("offsets_loop"))
 
 	Label("offsets_loop_done")
+	// We have no match
+	MOVQ(I64(-1), offset)
 
 	Label("chunk_match")
-
 	return offset
 }
 
