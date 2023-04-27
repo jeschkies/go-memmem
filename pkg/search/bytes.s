@@ -22,25 +22,30 @@ TEXT ·Mask(SB), NOSPLIT, $0-49
 	VPAND        Y0, Y1, Y0
 	VPMOVMSKB    Y0, BX
 	XORQ         SI, SI
-	MOVL         BX, SI
-	DECL         SI
-	ANDL         SI, BX
-	TZCNTL       BX, SI
-	ADDQ         SI, DX
 
+	// loop over offsets, ie bit positions
+offsets_loop:
+	CMPL   BX, $0x00
+	JE     offsets_loop_done
+	TZCNTL BX, SI
+	MOVQ   DX, DI
+	ADDQ   SI, DI
+
+	// test chunk
 	// compare two slices
-	MOVQ DX, DX
+	MOVQ AX, SI
+	MOVQ CX, R8
 
 memcmp_loop:
 	// the loop is done; the chunks must be equal
-	CMPQ AX, $0x00
+	CMPQ SI, $0x00
 	JE   memcmp_equal
-	MOVB (CX), BL
-	CMPB (DX), BL
+	MOVB (R8), R9
+	CMPB (DI), R9
 	JNE  memcmp_not_equal
-	ADDQ $0x01, DX
-	ADDQ $0x01, CX
-	DECQ AX
+	ADDQ $0x01, DI
+	ADDQ $0x01, R8
+	DECQ SI
 	JMP  memcmp_loop
 
 memcmp_equal:
@@ -48,6 +53,12 @@ memcmp_equal:
 	RET
 
 memcmp_not_equal:
+	MOVL BX, SI
+	DECL SI
+	ANDL SI, BX
+	JMP  offsets_loop
+
+offsets_loop_done:
 	MOVB $0x00, ret+48(FP)
 	RET
 

@@ -37,23 +37,32 @@ func main() {
 	VPCMPEQB(f, chunk0, eq0)
 	VPCMPEQB(l, chunk1, eq1)
 
-	m := YMM()
-	VPAND(eq0, eq1, m)
+	mask := YMM()
+	VPAND(eq0, eq1, mask)
 	
-	// calculate offset
-	o := GP32() // offset
-	VPMOVMSKB(m, o)
-	position := GP32()
-	XORQ(position.As64(), position.As64())
-	//TZCNTL(o, position)
+	// calculate offsets
+	offsets := GP32()
+	VPMOVMSKB(mask, offsets)
+	offset := GP32()
+	XORQ(offset.As64(), offset.As64())
 
-	inline_clear_leftmost_set(o)
-	TZCNTL(o, position)
+	Comment("loop over offsets, ie bit positions")
+	Label("offsets_loop")
+	CMPL(offsets, Imm(0))
+	JE(LabelRef("offsets_loop_done"))
+
+	TZCNTL(offsets, offset)
 
 	chunkPtr := GP64(); MOVQ(c0, chunkPtr)
-	ADDQ(position.As64(), chunkPtr)
+	ADDQ(offset.As64(), chunkPtr)
 
+	Comment("test chunk")
 	inline_memcmp(chunkPtr, needle0, neeldeLen)
+
+	inline_clear_leftmost_set(offsets)
+	JMP(LabelRef("offsets_loop"))
+
+	Label("offsets_loop_done")
 
 	r, _ := ReturnIndex(0).Resolve()
 	MOVB(U8(0), r.Addr)
