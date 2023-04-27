@@ -5,36 +5,37 @@
 // func Mask(needle []byte, haystack []byte) int64
 // Requires: AVX, AVX2, BMI
 TEXT ·Mask(SB), NOSPLIT, $0-56
-	MOVQ         needle_len+8(FP), AX
-	DECQ         AX
-	MOVQ         needle_base+0(FP), CX
-	MOVQ         CX, DX
-	ADDQ         AX, DX
-	VPBROADCASTB (CX), Y0
-	VPBROADCASTB (DX), Y1
-	MOVQ         haystack_base+24(FP), DX
+	MOVQ         haystack_base+24(FP), AX
+	MOVQ         needle_len+8(FP), CX
+	DECQ         CX
+	MOVQ         needle_base+0(FP), DX
 	MOVQ         DX, BX
-	ADDQ         AX, BX
-	VMOVDQU      (DX), Y2
+	ADDQ         CX, BX
+	VPBROADCASTB (DX), Y0
+	VPBROADCASTB (BX), Y1
+	MOVQ         AX, BX
+	ADDQ         CX, BX
+	VMOVDQU      (AX), Y2
 	VMOVDQU      (BX), Y3
 	VPCMPEQB     Y0, Y2, Y0
 	VPCMPEQB     Y1, Y3, Y1
 	VPAND        Y0, Y1, Y0
-	VPMOVMSKB    Y0, BX
-	XORQ         SI, SI
+
+	// calculate offsets
+	VPMOVMSKB Y0, BX
 
 	// loop over offsets, ie bit positions
 offsets_loop:
 	CMPL   BX, $0x00
 	JE     offsets_loop_done
 	TZCNTL BX, SI
-	MOVQ   DX, DI
+	MOVQ   AX, DI
 	ADDQ   SI, DI
 
 	// test chunk
 	// compare two slices
-	MOVQ AX, R8
-	MOVQ CX, R9
+	MOVQ CX, R8
+	MOVQ DX, R9
 
 memcmp_loop:
 	// the loop is done; the chunks must be equal
@@ -79,29 +80,28 @@ TEXT ·Search(SB), NOSPLIT, $0-49
 	VPBROADCASTB (SI), Y1
 
 chunk_loop:
-	CMPQ DX, BX
-	JG   chunk_loop_end
-	MOVQ DX, SI
-	ADDQ CX, SI
-	DECQ SI
-
-	// compare blocks against first and last character
+	CMPQ     DX, BX
+	JG       chunk_loop_end
+	MOVQ     DX, SI
+	ADDQ     CX, SI
 	VMOVDQU  (DX), Y2
 	VMOVDQU  (SI), Y3
 	VPCMPEQB Y0, Y2, Y2
 	VPCMPEQB Y1, Y3, Y3
+	VPAND    Y2, Y3, Y2
 
-	// create mask and determine position
-	VPAND     Y2, Y3, Y2
+	// calculate offsets
 	VPMOVMSKB Y2, SI
 
-mask_loop:
+	// loop over offsets, ie bit positions
+offsets_loop:
 	CMPL   SI, $0x00
-	JE     mask_loop_done
+	JE     offsets_loop_done
 	TZCNTL SI, DI
 	MOVQ   DX, R8
 	ADDQ   DI, R8
 
+	// test chunk
 	// compare two slices
 	MOVQ CX, DI
 	MOVQ AX, R9
@@ -119,12 +119,15 @@ memcmp_loop:
 	JMP  memcmp_loop
 
 memcmp_loop_done:
+	CMPQ DI, $0x00
+	JE   chunk_match
 	MOVL SI, DI
 	DECL DI
 	ANDL DI, SI
-	JMP  mask_loop
+	JMP  offsets_loop
 
-mask_loop_done:
+offsets_loop_done:
+chunk_match:
 	ADDQ $0x20, DX
 	JMP  chunk_loop
 

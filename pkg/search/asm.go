@@ -14,8 +14,7 @@ func main() {
 	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) int64")
 	f := YMM()
 	l := YMM()
-	chunk0 := YMM()
-	chunk1 := YMM()
+	ptr := Load(Param("haystack").Base(), GP64())
 	neeldeLen := Load(Param("needle").Len(), GP64())
 	DECQ(neeldeLen)
 	needle0 := Load(Param("needle").Base(), GP64())
@@ -24,53 +23,11 @@ func main() {
 	VPBROADCASTB(Mem{Base: needle0}, f)
 	VPBROADCASTB(Mem{Base: needle1}, l)
 
-	// create chunk0 and chunk1
-	c0 := Load(Param("haystack").Base(), GP64())
-	c1:= GP64(); MOVQ(c0, c1);
-	ADDQ(neeldeLen, c1)
-	VMOVDQU(Mem{Base: c0}, chunk0)
-	VMOVDQU(Mem{Base: c1}, chunk1)
-
-	// compare first and last character with chunk0 and chunk1
-	eq0 := YMM()
-	eq1 := YMM()
-	VPCMPEQB(f, chunk0, eq0)
-	VPCMPEQB(l, chunk1, eq1)
-
-	mask := YMM()
-	VPAND(eq0, eq1, mask)
-	
-	// calculate offsets
-	offsets := GP32()
-	VPMOVMSKB(mask, offsets)
-	offset := GP32()
-	XORQ(offset.As64(), offset.As64())
-
-	Comment("loop over offsets, ie bit positions")
-	Label("offsets_loop")
-	CMPL(offsets, Imm(0))
-	JE(LabelRef("offsets_loop_done"))
-
-	TZCNTL(offsets, offset)
-
-	chunkPtr := GP64(); MOVQ(c0, chunkPtr)
-	ADDQ(offset.As64(), chunkPtr)
-
-	Comment("test chunk")
-	cmpIndex := inline_memcmp(chunkPtr, needle0, neeldeLen)
-	CMPQ(cmpIndex, Imm(0))
-	JE(LabelRef("chunk_match"))
-
-	inline_clear_leftmost_set(offsets)
-	JMP(LabelRef("offsets_loop"))
-
-	Label("offsets_loop_done")
-
+	offset := inline_find_in_chunk(f, l, ptr, needle0, neeldeLen)
 	//r, _ := ReturnIndex(0).Resolve()
 	//MOVQ(U64(10), r.Addr) // TODO: return -1
 
-	Label("chunk_match")
-	Store(offset.As64(), ReturnIndex(0))
+	Store(offset, ReturnIndex(0))
 
 	RET()
 
@@ -85,7 +42,7 @@ func main() {
 	
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
 	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
-	ptr := GP64(); MOVQ(startPtr, ptr)
+	ptr = GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
 	Comment("create vector filled with first and last character")
@@ -118,51 +75,54 @@ func main() {
 	Generate()
 }
 
-func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) {
-	block_first := YMM()
-	block_last := YMM()
-	// ptr + needleLen -1
-	block_last_start := GP64(); MOVQ(ptr, block_last_start)
-	ADDQ(needleLen, block_last_start); DECQ(block_last_start)
+func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) reg.Register {
+	chunk0 := YMM()
+	chunk1 := YMM()
 
-	Comment("compare blocks against first and last character")
-	VMOVDQU(Mem{Base: ptr}, block_first)
-	VMOVDQU(Mem{Base: block_last_start}, block_last)
+	// create chunk0 and chunk1
+	c0 := ptr 
+	c1:= GP64(); MOVQ(c0, c1);
+	ADDQ(needleLen, c1)
+	VMOVDQU(Mem{Base: c0}, chunk0)
+	VMOVDQU(Mem{Base: c1}, chunk1)
 
-	eq_first := YMM()
-	eq_last := YMM()
+	// compare first and last character with chunk0 and chunk1
+	eq0 := YMM()
+	eq1 := YMM()
+	VPCMPEQB(first, chunk0, eq0)
+	VPCMPEQB(last, chunk1, eq1)
 
-	VPCMPEQB(first, block_first, eq_first)
-	VPCMPEQB(last, block_last, eq_last)
-
-	Comment("create mask and determine position")
 	mask := YMM()
-	VPAND(eq_first, eq_last, mask)
-	match_offset := GP32()
-	VPMOVMSKB(mask, match_offset)
+	VPAND(eq0, eq1, mask)
+	
+	Comment("calculate offsets")
+	offsets := GP32()
+	VPMOVMSKB(mask, offsets)
+	offset := GP64()
 
- 	// while match_offset != 0	
-	Label("mask_loop")
-	CMPL(match_offset, Imm(0))
-	JE(LabelRef("mask_loop_done"))
+	Comment("loop over offsets, ie bit positions")
+	Label("offsets_loop")
+	CMPL(offsets, Imm(0))
+	JE(LabelRef("offsets_loop_done"))
 
-	pos := GP32()
-	TZCNTL(match_offset, pos)
-	// Reset chunkPtr for each position in match offset
-	chunkPtr := GP64(); MOVQ(ptr, chunkPtr)
-	ADDQ(pos.As64(), chunkPtr)
+	TZCNTL(offsets, offset.As32())
 
-	inline_memcmp(chunkPtr, needlePtr, needleLen)
+	chunkPtr := GP64(); MOVQ(c0, chunkPtr)
+	ADDQ(offset.As64(), chunkPtr)
 
-	// clear left most bit of match offset:
-	// match_offset = match_offset & (match_offset -1)
-	match_offset_b := GP32(); MOVL(match_offset, match_offset_b)
-	DECL(match_offset_b)
-	ANDL(match_offset_b, match_offset)
+	Comment("test chunk")
+	cmpIndex := inline_memcmp(chunkPtr, needlePtr, needleLen)
+	CMPQ(cmpIndex, Imm(0))
+	JE(LabelRef("chunk_match"))
 
-	JMP(LabelRef("mask_loop"))
+	inline_clear_leftmost_set(offsets)
+	JMP(LabelRef("offsets_loop"))
 
-	Label("mask_loop_done")
+	Label("offsets_loop_done")
+
+	Label("chunk_match")
+
+	return offset
 }
 
 // inline_clear_leftmost_set clears the left most non-zero bit of mask
