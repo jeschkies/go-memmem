@@ -46,15 +46,18 @@ func main() {
 	JG(LabelRef("chunk_loop_end"))
 
 	o := inline_find_in_chunk(first, last, ptr, needlePtr, needleLenMain)
+	Comment("break early when offset is >=0.")
 	CMPQ(o, Imm(0))
-	JGE(LabelRef("chunk_loop_end"))
+	JGE(LabelRef("matched"))
 
 	// ptr += 32 // size of YMM == 256bit
 	ADDQ(Imm(32), ptr)
 	JMP(LabelRef("chunk_loop"))
 
+	Label("matched")
+	inline_matched(startPtr, ptr, o)
+
 	Label("chunk_loop_end")
-	// TODO: update index.
 	ret, _ := ReturnIndex(0).Resolve()
 	MOVQ(o, ret.Addr)
 	RET()
@@ -75,6 +78,16 @@ func inline_splat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtu
 	VPBROADCASTB(Mem{Base: needle1}, l)
 
 	return f, l
+}
+
+// inline_matched adjusts the offset and returns the true index.
+func inline_matched(startPtr, ptr, offset reg.Register) {
+	i := GP64()
+	MOVQ(ptr, i)
+	SUBQ(startPtr, i)
+	ADDQ(offset, i)
+	Store(i, ReturnIndex(0))
+	RET()
 }
 
 func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) reg.Register {
@@ -115,8 +128,8 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 
 	Comment("test chunk")
 	cmpIndex := inline_memcmp(chunkPtr, needlePtr, needleLen)
+	Comment("break early on a match")
 	CMPQ(cmpIndex, Imm(0))
-	// Break early
 	JE(LabelRef("chunk_match"))
 
 	inline_clear_leftmost_set(offsets)
