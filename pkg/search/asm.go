@@ -11,43 +11,35 @@ import (
 const MIN_HAYSTACK = 32
 
 func main() {
-	// Only generated for testing.
 	TEXT("findInChunk", NOSPLIT, "func(needle []byte, haystack []byte) int64")
-	ptr := Load(Param("haystack").Base(), GP64())
-	neeldeLen := Load(Param("needle").Len(), GP64()); DECQ(neeldeLen)
+	Doc("findInChunk is only generated for testing.")
+	hptr := Load(Param("haystack").Base(), GP64())
+	needleLen := Load(Param("needle").Len(), GP64()); DECQ(needleLen)
 	needle := Load(Param("needle").Base(), GP64())
-	f, l := inline_splat(needle, neeldeLen)
+	f, l := inline_splat(needle, needleLen)
 
-	offset := inline_find_in_chunk(f, l, ptr, needle, neeldeLen)
+	offset := inline_find_in_chunk(f, l, hptr, needle, needleLen)
 	//r, _ := ReturnIndex(0).Resolve()
 	//MOVQ(U64(10), r.Addr) // TODO: return -1
 
 	Store(offset, ReturnIndex(0))
 	RET()
 
-	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
-	Doc("Search checks if haystack contains needle.")
+	TEXT("Index", NOSPLIT, "func(haystack, needle []byte) int64")
+	Doc("Index returns the first position the needle is in the haystack.")
 
 	needlePtr := Load(Param("needle").Base(), GP64())
-	needleLen:= Load(Param("needle").Len(), GP64())
+	needleLenMain := Load(Param("needle").Len(), GP64()); DECQ(needleLenMain)
 
 	startPtr := Load(Param("haystack").Base(), GP64())
 	haystackLen, _ := Param("haystack").Len().Resolve()
 	
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
 	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
-	ptr = GP64(); MOVQ(startPtr, ptr)
+	ptr := GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
-	Comment("create vector filled with first and last character")
-	first := YMM()
-	last := YMM()
-	VPBROADCASTB(NewParamAddr("needle", 0), first)
-	k := GP64()
-	MOVQ(NewParamAddr("needle", 0), k)
-	ADDQ(needleLen, k)
-	DECQ(k)
-	VPBROADCASTB(Mem{Base: k}, last)
+	first, last := inline_splat(needle, needleLenMain)
 
 	Label("chunk_loop")
 
@@ -55,7 +47,7 @@ func main() {
 	CMPQ(ptr, maxPtr)
 	JG(LabelRef("chunk_loop_end"))
 
-	inline_find_in_chunk(first, last, ptr, needlePtr, needleLen)
+	o := inline_find_in_chunk(first, last, ptr, needlePtr, needleLenMain)
 
 	// ptr += 32 // size of YMM == 256bit
 	ADDQ(Imm(32), ptr)
@@ -63,7 +55,7 @@ func main() {
 
 	Label("chunk_loop_end")
 	ret, _ := ReturnIndex(0).Resolve()
-	MOVB(U8(0), ret.Addr)
+	MOVQ(o, ret.Addr)
 	RET()
 
 	Generate()
@@ -72,6 +64,7 @@ func main() {
 // inline_splat fills one 256bit register with repeated first neelde char and
 // another with repeated last needle char.
 func inline_splat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtual) {
+	Comment("create vector filled with first and last character")
 	f := YMM()
 	l := YMM()
 
@@ -107,6 +100,7 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	offsets := GP32()
 	VPMOVMSKB(mask, offsets)
 	offset := GP64()
+	XORQ(offset, offset)
 
 	Comment("loop over offsets, ie bit positions")
 	Label("offsets_loop")

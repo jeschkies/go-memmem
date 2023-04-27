@@ -5,10 +5,12 @@
 // func findInChunk(needle []byte, haystack []byte) int64
 // Requires: AVX, AVX2, BMI
 TEXT ·findInChunk(SB), NOSPLIT, $0-56
-	MOVQ         haystack_base+24(FP), AX
-	MOVQ         needle_len+8(FP), CX
-	DECQ         CX
-	MOVQ         needle_base+0(FP), DX
+	MOVQ haystack_base+24(FP), AX
+	MOVQ needle_len+8(FP), CX
+	DECQ CX
+	MOVQ needle_base+0(FP), DX
+
+	// create vector filled with first and last character
 	MOVQ         DX, BX
 	ADDQ         CX, BX
 	VPBROADCASTB (DX), Y0
@@ -23,6 +25,7 @@ TEXT ·findInChunk(SB), NOSPLIT, $0-56
 
 	// calculate offsets
 	VPMOVMSKB Y0, BX
+	XORQ      SI, SI
 
 	// loop over offsets, ie bit positions
 offsets_loop:
@@ -62,75 +65,76 @@ chunk_match:
 	MOVQ SI, ret+48(FP)
 	RET
 
-// func Search(haystack []byte, needle []byte) bool
+// func Index(haystack []byte, needle []byte) int64
 // Requires: AVX, AVX2, BMI
-TEXT ·Search(SB), NOSPLIT, $0-49
-	MOVQ needle_base+24(FP), AX
-	MOVQ needle_len+32(FP), CX
-	MOVQ haystack_base+0(FP), DX
-	MOVQ DX, BX
-	ADDQ haystack_len+8(FP), BX
-	SUBQ $0x20, BX
+TEXT ·Index(SB), NOSPLIT, $0-56
+	MOVQ needle_base+24(FP), CX
+	MOVQ needle_len+32(FP), DX
+	DECQ DX
+	MOVQ haystack_base+0(FP), BX
+	MOVQ BX, SI
+	ADDQ haystack_len+8(FP), SI
+	SUBQ $0x20, SI
 
 	// create vector filled with first and last character
-	VPBROADCASTB needle+0(FP), Y0
-	MOVQ         needle+0(FP), SI
-	ADDQ         CX, SI
-	DECQ         SI
-	VPBROADCASTB (SI), Y1
+	MOVQ         AX, DI
+	ADDQ         DX, DI
+	VPBROADCASTB (AX), Y0
+	VPBROADCASTB (DI), Y1
 
 chunk_loop:
-	CMPQ     DX, BX
+	CMPQ     BX, SI
 	JG       chunk_loop_end
-	MOVQ     DX, SI
-	ADDQ     CX, SI
-	VMOVDQU  (DX), Y2
-	VMOVDQU  (SI), Y3
+	MOVQ     BX, AX
+	ADDQ     DX, AX
+	VMOVDQU  (BX), Y2
+	VMOVDQU  (AX), Y3
 	VPCMPEQB Y0, Y2, Y2
 	VPCMPEQB Y1, Y3, Y3
 	VPAND    Y2, Y3, Y2
 
 	// calculate offsets
-	VPMOVMSKB Y2, SI
+	VPMOVMSKB Y2, DI
+	XORQ      AX, AX
 
 	// loop over offsets, ie bit positions
 offsets_loop:
-	CMPL   SI, $0x00
+	CMPL   DI, $0x00
 	JE     offsets_loop_done
-	TZCNTL SI, DI
-	MOVQ   DX, R8
-	ADDQ   DI, R8
+	TZCNTL DI, AX
+	MOVQ   BX, R8
+	ADDQ   AX, R8
 
 	// test chunk
 	// compare two slices
-	MOVQ CX, DI
-	MOVQ AX, R9
+	MOVQ DX, R9
+	MOVQ CX, R10
 
 memcmp_loop:
 	// the loop is done; the chunks must be equal
-	CMPQ DI, $0x00
+	CMPQ R9, $0x00
 	JE   memcmp_loop_done
-	MOVB (R9), R10
-	CMPB (R8), R10
+	MOVB (R10), R11
+	CMPB (R8), R11
 	JNE  memcmp_loop_done
 	ADDQ $0x01, R8
-	ADDQ $0x01, R9
-	DECQ DI
+	ADDQ $0x01, R10
+	DECQ R9
 	JMP  memcmp_loop
 
 memcmp_loop_done:
-	CMPQ DI, $0x00
+	CMPQ R9, $0x00
 	JE   chunk_match
-	MOVL SI, DI
-	DECL DI
-	ANDL DI, SI
+	MOVL DI, R8
+	DECL R8
+	ANDL R8, DI
 	JMP  offsets_loop
 
 offsets_loop_done:
 chunk_match:
-	ADDQ $0x20, DX
+	ADDQ $0x20, BX
 	JMP  chunk_loop
 
 chunk_loop_end:
-	MOVB $0x00, ret+48(FP)
+	MOVQ AX, ret+48(FP)
 	RET

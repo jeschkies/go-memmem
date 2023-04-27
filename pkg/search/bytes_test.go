@@ -13,7 +13,7 @@ func TestSimpleSearch(t *testing.T) {
 	for _, tt := range []struct {
 		haystack []byte 
 		needle   []byte
-		match    bool
+		index    int64 
 	}{
 		//{[]byte(`foobar`), []byte(`foobaz`), false},
 		//{[]byte(`foobar`), []byte(`foobar`), true},
@@ -23,13 +23,13 @@ func TestSimpleSearch(t *testing.T) {
 		{
 			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
 			[]byte(`amet`),
-			true,
+			int64(22),
 		},
 	} {
 		tt := tt
 		t.Run(fmt.Sprintf("`%s` in `%s`", tt.needle, tt.haystack), func(t *testing.T) {
-			r := Search(tt.haystack, tt.needle)
-			require.Equal(t, tt.match, r)
+			i := Index(tt.haystack, tt.needle)
+			require.Equal(t, tt.index, i)
 		})
 	}
 }
