@@ -35,13 +35,13 @@ func TestSimpleSearch(t *testing.T) {
 }
 
 func TestMask(t *testing.T) {
-	first := byte(4)
+	needle := []byte{4, 1, 3}
 	array := [32]byte{
-		0, 0, 0, 4, 0, 0, 0, 0,
+		0, 0, 0, 4, 1, 3, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0,
 	}
-	position := Mask(first, array[:])
+	position := Mask(needle, array[:])
 	require.Equal(t, int32(3), position)
 }

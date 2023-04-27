@@ -11,14 +11,18 @@ import (
 const MIN_HAYSTACK = 32
 
 func main() {
-	TEXT("Mask", NOSPLIT, "func(first byte, haystack []byte) int32")
+	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) int32")
 	f := YMM()
 	b := YMM()
 	m := YMM()
-	param, _ := Param("first").Resolve()
+	needle := Load(Param("needle").Base(), GP64())
 	p := Load(Param("haystack").Base(), GP64())
-	VPBROADCASTB(param.Addr, f)
+	VPBROADCASTB(Mem{Base: needle}, f)
+
+	// create chunk0
 	VMOVDQU(Mem{Base: p}, b)
+
+	// compare first with chunk0
 	VPCMPEQB(f, b, m)
 	o := GP32() // offset
 	VPMOVMSKB(m, o)
