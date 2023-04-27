@@ -53,6 +53,7 @@ memcmp_loop:
 	JMP  memcmp_loop
 
 memcmp_loop_done:
+	// break early on a match
 	CMPQ R8, $0x00
 	JE   chunk_match
 	MOVL BX, SI
@@ -77,69 +78,79 @@ TEXT ·Index(SB), NOSPLIT, $0-56
 	MOVQ DX, BX
 	ADDQ haystack_len+8(FP), BX
 	SUBQ $0x20, BX
+	MOVQ DX, DI
 
 	// create vector filled with first and last character
-	MOVQ         AX, DI
-	ADDQ         CX, DI
+	MOVQ         AX, R8
+	ADDQ         CX, R8
 	VPBROADCASTB (AX), Y0
-	VPBROADCASTB (DI), Y1
+	VPBROADCASTB (R8), Y1
 
 chunk_loop:
-	CMPQ     DX, BX
+	CMPQ     DI, BX
 	JG       chunk_loop_end
-	MOVQ     DX, SI
+	MOVQ     DI, SI
 	ADDQ     CX, SI
-	VMOVDQU  (DX), Y2
+	VMOVDQU  (DI), Y2
 	VMOVDQU  (SI), Y3
 	VPCMPEQB Y0, Y2, Y2
 	VPCMPEQB Y1, Y3, Y3
 	VPAND    Y2, Y3, Y2
 
 	// calculate offsets
-	VPMOVMSKB Y2, DI
+	VPMOVMSKB Y2, R8
 	MOVQ      $-1, SI
 
 	// loop over offsets, ie bit positions
 offsets_loop:
-	CMPL   DI, $0x00
+	CMPL   R8, $0x00
 	JE     offsets_loop_done
-	TZCNTL DI, SI
-	MOVQ   DX, R8
-	ADDQ   SI, R8
+	TZCNTL R8, SI
+	MOVQ   DI, R9
+	ADDQ   SI, R9
 
 	// test chunk
 	// compare two slices
-	MOVQ CX, R9
-	MOVQ AX, R10
+	MOVQ CX, R10
+	MOVQ AX, R11
 
 memcmp_loop:
 	// the loop is done; the chunks must be equal
-	CMPQ R9, $0x00
+	CMPQ R10, $0x00
 	JE   memcmp_loop_done
-	MOVB (R10), R11
-	CMPB (R8), R11
+	MOVB (R11), R12
+	CMPB (R9), R12
 	JNE  memcmp_loop_done
-	ADDQ $0x01, R8
-	ADDQ $0x01, R10
-	DECQ R9
+	ADDQ $0x01, R9
+	ADDQ $0x01, R11
+	DECQ R10
 	JMP  memcmp_loop
 
 memcmp_loop_done:
-	CMPQ R9, $0x00
+	// break early on a match
+	CMPQ R10, $0x00
 	JE   chunk_match
-	MOVL DI, SI
+	MOVL R8, SI
 	DECL SI
-	ANDL SI, DI
+	ANDL SI, R8
 	JMP  offsets_loop
 
 offsets_loop_done:
 	MOVQ $-1, SI
 
 chunk_match:
+	// break early when offset is >=0.
 	CMPQ SI, $0x00
-	JGE  chunk_loop_end
-	ADDQ $0x20, DX
+	JGE  matched
+	ADDQ $0x20, DI
 	JMP  chunk_loop
+
+matched:
+	MOVQ DI, AX
+	SUBQ DX, AX
+	ADDQ SI, AX
+	MOVQ AX, ret+48(FP)
+	RET
 
 chunk_loop_end:
 	MOVQ SI, ret+48(FP)
