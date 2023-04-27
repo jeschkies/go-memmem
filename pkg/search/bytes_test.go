@@ -31,6 +31,11 @@ func TestSimpleIndex(t *testing.T) {
 			int64(22),
 		},
 		{
+			[]byte(`no match`),
+			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
+			int64(-1),
+		},
+		{
 			[]byte(`elit`),
 			[]byte(`Lorem ipsum dolor sit amet, cons|ctetur adipiscing elit integer float.`),
 			int64(19), // TODO: should be actually 50
