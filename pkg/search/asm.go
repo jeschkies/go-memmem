@@ -11,7 +11,7 @@ import (
 const MIN_HAYSTACK = 32
 
 func main() {
-	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) int64")
+	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) bool")
 	f := YMM()
 	l := YMM()
 	chunk0 := YMM()
@@ -45,17 +45,18 @@ func main() {
 	VPMOVMSKB(m, o)
 	position := GP32()
 	XORQ(position.As64(), position.As64())
-	TZCNTL(o, position)
-
-	//chunkPtr := GP64(); MOVQ(c0, chunkPtr)
-	//ADDQ(position.As64(), chunkPtr)
-
-	//inline_memcmp(chunkPtr, needle0, neeldeLen)
+	//TZCNTL(o, position)
 
 	inline_clear_leftmost_set(o)
 	TZCNTL(o, position)
 
-	Store(position.As64(), ReturnIndex(0))
+	chunkPtr := GP64(); MOVQ(c0, chunkPtr)
+	ADDQ(position.As64(), chunkPtr)
+
+	inline_memcmp(chunkPtr, needle0, neeldeLen)
+
+	r, _ := ReturnIndex(0).Resolve()
+	MOVB(U8(0), r.Addr)
 	RET()
 
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
