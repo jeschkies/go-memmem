@@ -6,10 +6,18 @@
 // Requires: AVX, AVX2, BMI
 TEXT ·Mask(SB), NOSPLIT, $0-52
 	MOVQ         needle_base+0(FP), AX
-	MOVQ         haystack_base+24(FP), CX
+	MOVQ         AX, CX
+	ADDQ         $0x02, CX
 	VPBROADCASTB (AX), Y0
-	VMOVDQU      (CX), Y1
-	VPCMPEQB     Y0, Y1, Y0
+	VPBROADCASTB (CX), Y1
+	MOVQ         haystack_base+24(FP), AX
+	MOVQ         AX, CX
+	ADDQ         $0x02, CX
+	VMOVDQU      (AX), Y2
+	VMOVDQU      (CX), Y3
+	VPCMPEQB     Y0, Y2, Y0
+	VPCMPEQB     Y1, Y3, Y1
+	VPAND        Y0, Y1, Y0
 	VPMOVMSKB    Y0, AX
 	TZCNTL       AX, AX
 	MOVL         AX, ret+48(FP)

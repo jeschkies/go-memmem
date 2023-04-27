@@ -13,17 +13,31 @@ const MIN_HAYSTACK = 32
 func main() {
 	TEXT("Mask", NOSPLIT, "func(needle []byte, haystack []byte) int32")
 	f := YMM()
-	b := YMM()
+	l := YMM()
+	chunk0 := YMM()
+	chunk1 := YMM()
+	needle0 := Load(Param("needle").Base(), GP64())
+	needle1 := GP64(); MOVQ(needle0, needle1);
+	ADDQ(Imm(2), needle1)
+	VPBROADCASTB(Mem{Base: needle0}, f)
+	VPBROADCASTB(Mem{Base: needle1}, l)
+
+	// create chunk0 and chunk1
+	c0 := Load(Param("haystack").Base(), GP64())
+	c1:= GP64(); MOVQ(c0, c1);
+	ADDQ(Imm(2), c1)
+	VMOVDQU(Mem{Base: c0}, chunk0)
+	VMOVDQU(Mem{Base: c1}, chunk1)
+
+	// compare first and last character with chunk0
+	eq0 := YMM()
+	eq1 := YMM()
+	VPCMPEQB(f, chunk0, eq0)
+	VPCMPEQB(l, chunk1, eq1)
+
 	m := YMM()
-	needle := Load(Param("needle").Base(), GP64())
-	p := Load(Param("haystack").Base(), GP64())
-	VPBROADCASTB(Mem{Base: needle}, f)
-
-	// create chunk0
-	VMOVDQU(Mem{Base: p}, b)
-
-	// compare first with chunk0
-	VPCMPEQB(f, b, m)
+	VPAND(eq0, eq1, m)
+	
 	o := GP32() // offset
 	VPMOVMSKB(m, o)
 	position := GP32()
