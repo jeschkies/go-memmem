@@ -42,6 +42,7 @@ func TestMask(t *testing.T) {
 		0, 0, 0, 0, 0, 0, 0, 0,
 		0, 0, 0, 0, 0, 0, 0, 0,
 	}
-	position := Mask(needle, array[:])
-	require.Equal(t, int32(3), position)
+	found := Mask(needle, array[:])
+	require.Equal(t, true, found)
+	//require.Equal(t, int64(3), position)
 }
