@@ -74,7 +74,6 @@ TEXT ·Index(SB), NOSPLIT, $0-56
 	MOVQ haystack_base+0(FP), BX
 	MOVQ BX, SI
 	ADDQ haystack_len+8(FP), SI
-	SUBQ $0x20, SI
 
 	// create vector filled with first and last character
 	MOVQ         AX, DI

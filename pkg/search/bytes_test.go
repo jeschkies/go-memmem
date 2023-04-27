@@ -38,13 +38,13 @@ func TestMask(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		needle   []byte
-		haystack [32]byte 
+		haystack []byte 
 		index    int64 
 	}{
 		{
 			"chunk second match",
 			[]byte{4, 1, 3},
-			[32]byte{
+			[]byte{
 				0, 0, 0, 4, 2, 3, 0, 0,
 				0, 4, 1, 3, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0,
@@ -55,7 +55,7 @@ func TestMask(t *testing.T) {
 		{
 			"chunk first match",
 			[]byte{4, 1, 3},
-			[32]byte{
+			[]byte{
 				0, 0, 0, 4, 1, 3, 0, 0,
 				0, 4, 1, 3, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0,
@@ -66,7 +66,7 @@ func TestMask(t *testing.T) {
 		{
 			"longer chunk",
 			[]byte{4, 1, 3, 3},
-			[32]byte{
+			[]byte{
 				0, 0, 0, 4, 1, 3, 0, 0,
 				0, 4, 1, 3, 3, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0,
@@ -74,10 +74,16 @@ func TestMask(t *testing.T) {
 			},
 			int64(9),
 		},
+		{
+			"text chunk",
+			[]byte(`amet`),
+			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
+			int64(22),
+		},
 	} {
 		tt := tt
 		t.Run(fmt.Sprintf(tt.name), func(t *testing.T) {
-			index := findInChunk(tt.needle, tt.haystack[:])
+			index := findInChunk(tt.needle, tt.haystack)
 			require.Equal(t, tt.index, index)
 			if index != -1 {
 				end := index + int64(len(tt.needle))

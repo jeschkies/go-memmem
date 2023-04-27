@@ -35,7 +35,7 @@ func main() {
 	haystackLen, _ := Param("haystack").Len().Resolve()
 	
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
-	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
+	//maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
 	ptr := GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
@@ -44,7 +44,8 @@ func main() {
 	Label("chunk_loop")
 
 	// while ptr <= max_ptr
-	CMPQ(ptr, maxPtr)
+	//CMPQ(ptr, maxPtr)
+	CMPQ(ptr, endPtr)
 	JG(LabelRef("chunk_loop_end"))
 
 	o := inline_find_in_chunk(first, last, ptr, needlePtr, needleLenMain)
