@@ -16,16 +16,18 @@ func main() {
 	l := YMM()
 	chunk0 := YMM()
 	chunk1 := YMM()
+	neeldeLen := Load(Param("needle").Len(), GP64())
+	DECQ(neeldeLen)
 	needle0 := Load(Param("needle").Base(), GP64())
 	needle1 := GP64(); MOVQ(needle0, needle1);
-	ADDQ(Imm(2), needle1)
+	ADDQ(neeldeLen, needle1)
 	VPBROADCASTB(Mem{Base: needle0}, f)
 	VPBROADCASTB(Mem{Base: needle1}, l)
 
 	// create chunk0 and chunk1
 	c0 := Load(Param("haystack").Base(), GP64())
 	c1:= GP64(); MOVQ(c0, c1);
-	ADDQ(Imm(2), c1)
+	ADDQ(neeldeLen, c1)
 	VMOVDQU(Mem{Base: c0}, chunk0)
 	VMOVDQU(Mem{Base: c1}, chunk1)
 
