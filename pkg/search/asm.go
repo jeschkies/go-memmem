@@ -20,9 +20,11 @@ func main() {
 	VPBROADCASTB(param.Addr, f)
 	VMOVDQU(Mem{Base: p}, b)
 	VPCMPEQB(f, b, m)
-	o := GP32()
+	o := GP32() // offset
 	VPMOVMSKB(m, o)
-	Store(o, ReturnIndex(0))
+	position := GP32()
+	TZCNTL(o, position)
+	Store(position, ReturnIndex(0))
 	RET()
 
 	TEXT("Search", NOSPLIT, "func(haystack, needle []byte) bool")
