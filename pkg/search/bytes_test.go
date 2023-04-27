@@ -9,20 +9,25 @@ import (
 
 //go:generate go run asm.go -out bytes.s -stubs bytes.go
 
-func TestSimpleSearch(t *testing.T) {
+func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
-		haystack []byte 
 		needle   []byte
+		haystack []byte 
 		index    int64 
 	}{
-		//{[]byte(`foobar`), []byte(`foobaz`), false},
-		//{[]byte(`foobar`), []byte(`foobar`), true},
-		//{[]byte(`foo`), []byte(`foobar`), false},
-		//{[]byte(`foobar`), []byte(`foo`), false},
-		//{[]byte(`a cat tries`), []byte(`cat`), true},
 		{
-			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
+			[]byte{4, 1, 3},
+			[]byte{
+				0, 0, 0, 4, 1, 3, 0, 0,
+				0, 4, 1, 3, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+			},
+			int64(3),
+		},
+		{
 			[]byte(`amet`),
+			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
 			int64(22),
 		},
 	} {

@@ -19,8 +19,6 @@ func main() {
 	f, l := inline_splat(needle, needleLen)
 
 	offset := inline_find_in_chunk(f, l, hptr, needle, needleLen)
-	//r, _ := ReturnIndex(0).Resolve()
-	//MOVQ(U64(10), r.Addr) // TODO: return -1
 
 	Store(offset, ReturnIndex(0))
 	RET()
@@ -35,20 +33,21 @@ func main() {
 	haystackLen, _ := Param("haystack").Len().Resolve()
 	
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
-	//maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
+	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
 	ptr := GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
-	first, last := inline_splat(needle, needleLenMain)
+	first, last := inline_splat(needlePtr, needleLenMain)
 
 	Label("chunk_loop")
 
 	// while ptr <= max_ptr
-	//CMPQ(ptr, maxPtr)
+	CMPQ(ptr, maxPtr)
 	CMPQ(ptr, endPtr)
 	JG(LabelRef("chunk_loop_end"))
 
-	o := inline_find_in_chunk(first, last, ptr, needlePtr, needleLenMain)
+	o := inline_find_in_chunk(first, last, startPtr, needlePtr, needleLenMain)
+	// TODO: break early
 
 	// ptr += 32 // size of YMM == 256bit
 	ADDQ(Imm(32), ptr)
@@ -116,6 +115,7 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	Comment("test chunk")
 	cmpIndex := inline_memcmp(chunkPtr, needlePtr, needleLen)
 	CMPQ(cmpIndex, Imm(0))
+	// Break early
 	JE(LabelRef("chunk_match"))
 
 	inline_clear_leftmost_set(offsets)

@@ -68,72 +68,76 @@ chunk_match:
 // func Index(haystack []byte, needle []byte) int64
 // Requires: AVX, AVX2, BMI
 TEXT ·Index(SB), NOSPLIT, $0-56
-	MOVQ needle_base+24(FP), CX
-	MOVQ needle_len+32(FP), DX
-	DECQ DX
-	MOVQ haystack_base+0(FP), BX
+	MOVQ needle_base+24(FP), AX
+	MOVQ needle_len+32(FP), CX
+	DECQ CX
+	MOVQ haystack_base+0(FP), DX
+	MOVQ DX, BX
+	ADDQ haystack_len+8(FP), BX
 	MOVQ BX, SI
-	ADDQ haystack_len+8(FP), SI
+	SUBQ $0x20, SI
+	MOVQ DX, DI
 
 	// create vector filled with first and last character
-	MOVQ         AX, DI
-	ADDQ         DX, DI
+	MOVQ         AX, R8
+	ADDQ         CX, R8
 	VPBROADCASTB (AX), Y0
-	VPBROADCASTB (DI), Y1
+	VPBROADCASTB (R8), Y1
 
 chunk_loop:
-	CMPQ     BX, SI
+	CMPQ     DI, SI
+	CMPQ     DI, BX
 	JG       chunk_loop_end
-	MOVQ     BX, AX
-	ADDQ     DX, AX
-	VMOVDQU  (BX), Y2
-	VMOVDQU  (AX), Y3
+	MOVQ     DX, R8
+	ADDQ     CX, R8
+	VMOVDQU  (DX), Y2
+	VMOVDQU  (R8), Y3
 	VPCMPEQB Y0, Y2, Y2
 	VPCMPEQB Y1, Y3, Y3
 	VPAND    Y2, Y3, Y2
 
 	// calculate offsets
-	VPMOVMSKB Y2, DI
-	XORQ      AX, AX
+	VPMOVMSKB Y2, R8
+	XORQ      R9, R9
 
 	// loop over offsets, ie bit positions
 offsets_loop:
-	CMPL   DI, $0x00
+	CMPL   R8, $0x00
 	JE     offsets_loop_done
-	TZCNTL DI, AX
-	MOVQ   BX, R8
-	ADDQ   AX, R8
+	TZCNTL R8, R9
+	MOVQ   DX, R10
+	ADDQ   R9, R10
 
 	// test chunk
 	// compare two slices
-	MOVQ DX, R9
-	MOVQ CX, R10
+	MOVQ CX, R11
+	MOVQ AX, R12
 
 memcmp_loop:
 	// the loop is done; the chunks must be equal
-	CMPQ R9, $0x00
+	CMPQ R11, $0x00
 	JE   memcmp_loop_done
-	MOVB (R10), R11
-	CMPB (R8), R11
+	MOVB (R12), R13
+	CMPB (R10), R13
 	JNE  memcmp_loop_done
-	ADDQ $0x01, R8
 	ADDQ $0x01, R10
-	DECQ R9
+	ADDQ $0x01, R12
+	DECQ R11
 	JMP  memcmp_loop
 
 memcmp_loop_done:
-	CMPQ R9, $0x00
+	CMPQ R11, $0x00
 	JE   chunk_match
-	MOVL DI, R8
-	DECL R8
-	ANDL R8, DI
+	MOVL R8, R10
+	DECL R10
+	ANDL R10, R8
 	JMP  offsets_loop
 
 offsets_loop_done:
 chunk_match:
-	ADDQ $0x20, BX
+	ADDQ $0x20, DI
 	JMP  chunk_loop
 
 chunk_loop_end:
-	MOVQ AX, ret+48(FP)
+	MOVQ R9, ret+48(FP)
 	RET
