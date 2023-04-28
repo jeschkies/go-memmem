@@ -1,3 +1,4 @@
+//nolint
 package tools 
 
 // Declare dependency on avo so that `go mod tidy` won't ignore it.
