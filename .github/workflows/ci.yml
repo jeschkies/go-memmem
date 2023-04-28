@@ -13,9 +13,6 @@ jobs:
           cache: false
       - uses: actions/checkout@v3
 
-      - name: Vendor
-        run: go mod vendor
-
       - name: Lint 
         uses: golangci/golangci-lint-action@v3
         with:
