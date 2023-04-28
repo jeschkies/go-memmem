@@ -16,9 +16,9 @@ func main() {
 	hptr := Load(Param("haystack").Base(), GP64())
 	needleLen := Load(Param("needle").Len(), GP64()); DECQ(needleLen)
 	needle := Load(Param("needle").Base(), GP64())
-	f, l := inline_splat(needle, needleLen)
+	f, l := inlineSplat(needle, needleLen)
 
-	offset := inline_find_in_chunk(f, l, hptr, needle, needleLen)
+	offset := inlineFindInChunk("test", f, l, hptr, needle, needleLen)
 
 	Store(offset, ReturnIndex(0))
 	RET()
@@ -37,7 +37,7 @@ func main() {
 	ptr := GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
-	first, last := inline_splat(needlePtr, needleLenMain)
+	first, last := inlineSplat(needlePtr, needleLenMain)
 
 	Label("chunk_loop")
 
@@ -45,7 +45,7 @@ func main() {
 	CMPQ(ptr, maxPtr)
 	JG(LabelRef("chunk_loop_end"))
 
-	o := inline_find_in_chunk(first, last, ptr, needlePtr, needleLenMain)
+	o := inlineFindInChunk("main", first, last, ptr, needlePtr, needleLenMain)
 	Comment("break early when offset is >=0.")
 	CMPQ(o, Imm(0))
 	JGE(LabelRef("matched"))
@@ -55,19 +55,45 @@ func main() {
 	JMP(LabelRef("chunk_loop"))
 
 	Label("matched")
-	inline_matched(startPtr, ptr, o)
+	// Return true index
+	inlineMatched(startPtr, ptr, o)
 
 	Label("chunk_loop_end")
+	Comment("match remaining bytes if any")
+	CMPQ(ptr, endPtr)
+	JGE(LabelRef("not_matched"))
+
+	inlineMatchRemaining(first, last, ptr, endPtr, maxPtr, needlePtr, needleLenMain, o)
+
+	Label("not_matched")
 	ret, _ := ReturnIndex(0).Resolve()
 	MOVQ(o, ret.Addr)
+	RET()
+
+	TEXT("matchRemaining", NOSPLIT, "func(needle []byte, haystack []byte) int64")
+	Doc("matchRemaining is only generated for testing.")
+	nPtr := Load(Param("needle").Base(), GP64())
+	nLen := Load(Param("needle").Len(), GP64()); DECQ(nLen)
+
+	s:= Load(Param("haystack").Base(), GP64())
+	hLen, _ := Param("haystack").Len().Resolve()
+	
+	e:= GP64(); MOVQ(s, e); ADDQ(hLen.Addr, e)
+	m:= GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), m)
+	p := GP64(); MOVQ(startPtr, ptr)
+	offsetTest := GP64()
+
+	inlineMatchRemaining(first, last, p, e, m, nPtr, nLen, offsetTest)
+	r, _ := ReturnIndex(0).Resolve()
+	MOVQ(offsetTest, r.Addr)
 	RET()
 
 	Generate()
 }
 
-// inline_splat fills one 256bit register with repeated first neelde char and
+// inlineSplat fills one 256bit register with repeated first neelde char and
 // another with repeated last needle char.
-func inline_splat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtual) {
+func inlineSplat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtual) {
 	Comment("create vector filled with first and last character")
 	f := YMM()
 	l := YMM()
@@ -80,8 +106,9 @@ func inline_splat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtu
 	return f, l
 }
 
-// inline_matched adjusts the offset and returns the true index.
-func inline_matched(startPtr, ptr, offset reg.Register) {
+// inlineMatched adjusts the offset and returns the true index.
+func inlineMatched(startPtr, ptr, offset reg.Register) {
+	Comment("adjust the offset and return the true index")
 	i := GP64()
 	MOVQ(ptr, i)
 	SUBQ(startPtr, i)
@@ -90,7 +117,7 @@ func inline_matched(startPtr, ptr, offset reg.Register) {
 	RET()
 }
 
-func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) reg.Register {
+func inlineFindInChunk(caller string, first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) reg.Register {
 	chunk0 := YMM()
 	chunk1 := YMM()
 
@@ -117,9 +144,9 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	MOVQ(I64(-1), offset)
 
 	Comment("loop over offsets, ie bit positions")
-	Label("offsets_loop")
+	Label(caller + "_offsets_loop")
 	CMPL(offsets, Imm(0))
-	JE(LabelRef("offsets_loop_done"))
+	JE(LabelRef(caller + "_offsets_loop_done"))
 
 	TZCNTL(offsets, offset.As32())
 
@@ -127,33 +154,55 @@ func inline_find_in_chunk(first, last reg.VecVirtual, ptr, needlePtr, needleLen 
 	ADDQ(offset.As64(), chunkPtr)
 
 	Comment("test chunk")
-	cmpIndex := inline_memcmp(chunkPtr, needlePtr, needleLen)
+	cmpIndex := inlineMemcmp(caller, chunkPtr, needlePtr, needleLen)
 	Comment("break early on a match")
 	CMPQ(cmpIndex, Imm(0))
-	JE(LabelRef("chunk_match"))
+	JE(LabelRef(caller + "_chunk_match"))
 
-	inline_clear_leftmost_set(offsets)
-	JMP(LabelRef("offsets_loop"))
+	inlineClearLeftmostSet(offsets)
+	JMP(LabelRef(caller + "_offsets_loop"))
 
-	Label("offsets_loop_done")
+	Label(caller + "_offsets_loop_done")
 	// We have no match
 	MOVQ(I64(-1), offset)
 
-	Label("chunk_match")
+	Label(caller + "_chunk_match")
 	return offset
 }
 
-// inline_clear_leftmost_set clears the left most non-zero bit of mask
-func inline_clear_leftmost_set(mask reg.Register) {
+// inlineClearLeftmostSet clears the left most non-zero bit of mask
+func inlineClearLeftmostSet(mask reg.Register) {
 	// mask = mask & (mask -1)
 	tmp := GP32(); MOVL(mask, tmp)
 	DECL(tmp)
 	ANDL(tmp, mask)
 }
 
-// inline_memcmp compares the bytes in xPtr and yPtr. The returned register is
+// inlineMatchRemaining searches the remaining bytes that are shorter than the
+// vector size.
+func inlineMatchRemaining(first, last reg.VecVirtual, ptr, endPtr, maxPtr, needlePtr, needleLen, offset reg.Register) {
+	// TODO: Could use endPtr instead.
+	remaining := GP64()
+	MOVQ(endPtr, remaining)
+	SUBQ(ptr, remaining)
+	CMPQ(remaining, needleLen)
+	JGE(LabelRef("not_enough_bytes_left"))
+
+	// Notice we are using maxPtr instead of ptr.
+	o := inlineFindInChunk("remaining", first, last, maxPtr, needlePtr, needleLen)
+	MOVQ(o, offset)
+	JMP(LabelRef("match_remaining_done"))
+
+	Label("not_enough_bytes_left")
+	MOVQ(I64(-1), offset)
+
+	Label("match_remaining_done")
+	return
+}
+
+// inlineMemcmp compares the bytes in xPtr and yPtr. The returned register is
 // the index where it left off. If it's 0 there's a match.
-func inline_memcmp(xPtr, yPtr, size reg.Register) reg.Register {
+func inlineMemcmp(caller string, xPtr, yPtr, size reg.Register) reg.Register {
 	Comment("compare two slices")
 
 	i := GP64(); MOVQ(size, i)
@@ -162,23 +211,23 @@ func inline_memcmp(xPtr, yPtr, size reg.Register) reg.Register {
 	// TODO: compare more than one byte at a time.
 	r := GP8()
 
-	Label("memcmp_loop")
+	Label(caller + "_memcmp_loop")
 
 	Comment("the loop is done; the chunks must be equal")
 	CMPQ(i, Imm(0))
-	JE(LabelRef("memcmp_loop_done"))
+	JE(LabelRef(caller + "_memcmp_loop_done"))
 
 	MOVB(Mem{Base: y}, r)
 	CMPB(Mem{Base: x}, r)
 	// Break early
-	JNE(LabelRef("memcmp_loop_done"))
+	JNE(LabelRef(caller + "_memcmp_loop_done"))
 
 	ADDQ(Imm(1), x)
 	ADDQ(Imm(1), y)
 	DECQ(i)
-	JMP(LabelRef("memcmp_loop"))
+	JMP(LabelRef(caller + "_memcmp_loop"))
 
 	// do not return anything
-	Label("memcmp_loop_done")
+	Label(caller + "_memcmp_loop_done")
 	return i
 }
