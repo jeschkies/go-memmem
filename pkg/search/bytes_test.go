@@ -36,9 +36,9 @@ func TestSimpleIndex(t *testing.T) {
 			int64(-1),
 		},
 		{
-			[]byte(`elit`),
+			[]byte(`float`),
 			[]byte(`Lorem ipsum dolor sit amet, cons|ctetur adipiscing elit integer float.`),
-			int64(51),
+			int64(64),
 		},
 	} {
 		tt := tt

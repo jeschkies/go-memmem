@@ -28,9 +28,9 @@ TEXT ·findInChunk(SB), NOSPLIT, $0-56
 	MOVQ      $-1, SI
 
 	// loop over offsets, ie bit positions
-offsets_loop:
+test_offsets_loop:
 	CMPL   BX, $0x00
-	JE     offsets_loop_done
+	JE     test_offsets_loop_done
 	TZCNTL BX, SI
 	MOVQ   AX, DI
 	ADDQ   SI, DI
@@ -40,31 +40,31 @@ offsets_loop:
 	MOVQ CX, R8
 	MOVQ DX, R9
 
-memcmp_loop:
+test_memcmp_loop:
 	// the loop is done; the chunks must be equal
 	CMPQ R8, $0x00
-	JE   memcmp_loop_done
+	JE   test_memcmp_loop_done
 	MOVB (R9), R10
 	CMPB (DI), R10
-	JNE  memcmp_loop_done
+	JNE  test_memcmp_loop_done
 	ADDQ $0x01, DI
 	ADDQ $0x01, R9
 	DECQ R8
-	JMP  memcmp_loop
+	JMP  test_memcmp_loop
 
-memcmp_loop_done:
+test_memcmp_loop_done:
 	// break early on a match
 	CMPQ R8, $0x00
-	JE   chunk_match
+	JE   test_chunk_match
 	MOVL BX, SI
 	DECL SI
 	ANDL SI, BX
-	JMP  offsets_loop
+	JMP  test_offsets_loop
 
-offsets_loop_done:
+test_offsets_loop_done:
 	MOVQ $-1, SI
 
-chunk_match:
+test_chunk_match:
 	MOVQ SI, ret+48(FP)
 	RET
 
@@ -77,7 +77,9 @@ TEXT ·Index(SB), NOSPLIT, $0-56
 	MOVQ haystack_base+0(FP), DX
 	MOVQ DX, BX
 	ADDQ haystack_len+8(FP), BX
-	SUBQ $0x20, BX
+	MOVQ BX, SI
+	SUBQ $0x20, SI
+	SUBQ CX, SI
 	MOVQ DX, DI
 
 	// create vector filled with first and last character
@@ -87,71 +89,140 @@ TEXT ·Index(SB), NOSPLIT, $0-56
 	VPBROADCASTB (R8), Y1
 
 chunk_loop:
-	CMPQ     DI, BX
+	CMPQ     DI, SI
 	JG       chunk_loop_end
-	MOVQ     DI, SI
-	ADDQ     CX, SI
+	MOVQ     DI, R8
+	ADDQ     CX, R8
 	VMOVDQU  (DI), Y2
-	VMOVDQU  (SI), Y3
+	VMOVDQU  (R8), Y3
 	VPCMPEQB Y0, Y2, Y2
 	VPCMPEQB Y1, Y3, Y3
 	VPAND    Y2, Y3, Y2
 
 	// calculate offsets
 	VPMOVMSKB Y2, R8
-	MOVQ      $-1, SI
+	MOVQ      $-1, R9
 
 	// loop over offsets, ie bit positions
-offsets_loop:
+main_offsets_loop:
 	CMPL   R8, $0x00
-	JE     offsets_loop_done
-	TZCNTL R8, SI
-	MOVQ   DI, R9
-	ADDQ   SI, R9
+	JE     main_offsets_loop_done
+	TZCNTL R8, R9
+	MOVQ   DI, R10
+	ADDQ   R9, R10
 
 	// test chunk
 	// compare two slices
-	MOVQ CX, R10
-	MOVQ AX, R11
+	MOVQ CX, R11
+	MOVQ AX, R12
 
-memcmp_loop:
+main_memcmp_loop:
 	// the loop is done; the chunks must be equal
-	CMPQ R10, $0x00
-	JE   memcmp_loop_done
-	MOVB (R11), R12
-	CMPB (R9), R12
-	JNE  memcmp_loop_done
-	ADDQ $0x01, R9
-	ADDQ $0x01, R11
-	DECQ R10
-	JMP  memcmp_loop
+	CMPQ R11, $0x00
+	JE   main_memcmp_loop_done
+	MOVB (R12), R13
+	CMPB (R10), R13
+	JNE  main_memcmp_loop_done
+	ADDQ $0x01, R10
+	ADDQ $0x01, R12
+	DECQ R11
+	JMP  main_memcmp_loop
 
-memcmp_loop_done:
+main_memcmp_loop_done:
 	// break early on a match
-	CMPQ R10, $0x00
-	JE   chunk_match
-	MOVL R8, SI
-	DECL SI
-	ANDL SI, R8
-	JMP  offsets_loop
+	CMPQ R11, $0x00
+	JE   main_chunk_match
+	MOVL R8, R9
+	DECL R9
+	ANDL R9, R8
+	JMP  main_offsets_loop
 
-offsets_loop_done:
-	MOVQ $-1, SI
+main_offsets_loop_done:
+	MOVQ $-1, R9
 
-chunk_match:
+main_chunk_match:
 	// break early when offset is >=0.
-	CMPQ SI, $0x00
+	CMPQ R9, $0x00
 	JGE  matched
 	ADDQ $0x20, DI
 	JMP  chunk_loop
 
 matched:
+	// adjust the offset and return the true index
 	MOVQ DI, AX
 	SUBQ DX, AX
-	ADDQ SI, AX
+	ADDQ R9, AX
 	MOVQ AX, ret+48(FP)
 	RET
 
 chunk_loop_end:
-	MOVQ SI, ret+48(FP)
+	// match remaining bytes if any
+	CMPQ     DI, BX
+	JGE      not_matched
+	SUBQ     DI, BX
+	CMPQ     BX, CX
+	JL       not_enough_bytes_left
+	MOVQ     SI, DI
+	MOVQ     DI, BX
+	ADDQ     CX, BX
+	VMOVDQU  (DI), Y2
+	VMOVDQU  (BX), Y3
+	VPCMPEQB Y0, Y2, Y0
+	VPCMPEQB Y1, Y3, Y1
+	VPAND    Y0, Y1, Y0
+
+	// calculate offsets
+	VPMOVMSKB Y0, BX
+	MOVQ      $-1, SI
+
+	// loop over offsets, ie bit positions
+remaining_offsets_loop:
+	CMPL   BX, $0x00
+	JE     remaining_offsets_loop_done
+	TZCNTL BX, SI
+	MOVQ   DI, R8
+	ADDQ   SI, R8
+
+	// test chunk
+	// compare two slices
+	MOVQ CX, R9
+	MOVQ AX, R10
+
+remaining_memcmp_loop:
+	// the loop is done; the chunks must be equal
+	CMPQ R9, $0x00
+	JE   remaining_memcmp_loop_done
+	MOVB (R10), R11
+	CMPB (R8), R11
+	JNE  remaining_memcmp_loop_done
+	ADDQ $0x01, R8
+	ADDQ $0x01, R10
+	DECQ R9
+	JMP  remaining_memcmp_loop
+
+remaining_memcmp_loop_done:
+	// break early on a match
+	CMPQ R9, $0x00
+	JE   remaining_chunk_match
+	MOVL BX, SI
+	DECL SI
+	ANDL SI, BX
+	JMP  remaining_offsets_loop
+
+remaining_offsets_loop_done:
+	MOVQ $-1, SI
+
+remaining_chunk_match:
+	MOVQ SI, R9
+	JMP  match_remaining_done
+
+not_enough_bytes_left:
+	MOVQ $-1, R9
+
+match_remaining_done:
+	CMPQ R9, $0x00
+	JGE  matched
+
+not_matched:
+	MOVQ R9, ret+48(FP)
 	RET
