@@ -2,6 +2,8 @@ package search
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -116,5 +118,18 @@ func TestMask(t *testing.T) {
 				require.ElementsMatch(t, tt.needle, tt.haystack[index:end])
 			}
 		})
+	}
+}
+
+func BenchmarkIndex(b *testing.B) {
+	needle := []byte("wontfind")
+	haystack, err := ioutil.ReadFile("data.log")
+	if err != nil {
+		log.Fatalf(`msg="could not open log file" err=%s`, err)
+		b.Fail()
+	}
+
+	for n := 0; n < 0; n++ {
+		Index(haystack, needle)
 	}
 }
