@@ -33,7 +33,9 @@ func main() {
 	haystackLen, _ := Param("haystack").Len().Resolve()
 	
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
-	maxPtr := GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), maxPtr)
+	maxPtr := GP64(); MOVQ(endPtr, maxPtr);
+	SUBQ(Imm(MIN_HAYSTACK), maxPtr)
+	SUBQ(needleLenMain, maxPtr)
 	ptr := GP64(); MOVQ(startPtr, ptr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
@@ -64,28 +66,12 @@ func main() {
 	JGE(LabelRef("not_matched"))
 
 	inlineMatchRemaining(first, last, ptr, endPtr, maxPtr, needlePtr, needleLenMain, o)
+	CMPQ(o, Imm(0))
+	JGE(LabelRef("matched"))
 
 	Label("not_matched")
 	ret, _ := ReturnIndex(0).Resolve()
 	MOVQ(o, ret.Addr)
-	RET()
-
-	TEXT("matchRemaining", NOSPLIT, "func(needle []byte, haystack []byte) int64")
-	Doc("matchRemaining is only generated for testing.")
-	nPtr := Load(Param("needle").Base(), GP64())
-	nLen := Load(Param("needle").Len(), GP64()); DECQ(nLen)
-
-	s:= Load(Param("haystack").Base(), GP64())
-	hLen, _ := Param("haystack").Len().Resolve()
-	
-	e:= GP64(); MOVQ(s, e); ADDQ(hLen.Addr, e)
-	m:= GP64(); MOVQ(endPtr, maxPtr); SUBQ(Imm(MIN_HAYSTACK), m)
-	p := GP64(); MOVQ(startPtr, ptr)
-	offsetTest := GP64()
-
-	inlineMatchRemaining(first, last, p, e, m, nPtr, nLen, offsetTest)
-	r, _ := ReturnIndex(0).Resolve()
-	MOVQ(offsetTest, r.Addr)
 	RET()
 
 	Generate()
@@ -186,10 +172,11 @@ func inlineMatchRemaining(first, last reg.VecVirtual, ptr, endPtr, maxPtr, needl
 	MOVQ(endPtr, remaining)
 	SUBQ(ptr, remaining)
 	CMPQ(remaining, needleLen)
-	JGE(LabelRef("not_enough_bytes_left"))
+	JL(LabelRef("not_enough_bytes_left"))
 
 	// Notice we are using maxPtr instead of ptr.
-	o := inlineFindInChunk("remaining", first, last, maxPtr, needlePtr, needleLen)
+	MOVQ(maxPtr, ptr)
+	o := inlineFindInChunk("remaining", first, last, ptr, needlePtr, needleLen)
 	MOVQ(o, offset)
 	JMP(LabelRef("match_remaining_done"))
 

@@ -79,6 +79,7 @@ TEXT ·Index(SB), NOSPLIT, $0-56
 	ADDQ haystack_len+8(FP), BX
 	MOVQ BX, SI
 	SUBQ $0x20, SI
+	SUBQ CX, SI
 	MOVQ DX, DI
 
 	// create vector filled with first and last character
@@ -158,143 +159,70 @@ chunk_loop_end:
 	// match remaining bytes if any
 	CMPQ     DI, BX
 	JGE      not_matched
-	MOVQ     BX, DX
-	SUBQ     DI, DX
-	CMPQ     DX, CX
-	JGE      not_enough_bytes_left
-	MOVQ     SI, DX
-	ADDQ     CX, DX
-	VMOVDQU  (SI), Y2
-	VMOVDQU  (DX), Y3
+	SUBQ     DI, BX
+	CMPQ     BX, CX
+	JL       not_enough_bytes_left
+	MOVQ     SI, DI
+	MOVQ     DI, BX
+	ADDQ     CX, BX
+	VMOVDQU  (DI), Y2
+	VMOVDQU  (BX), Y3
 	VPCMPEQB Y0, Y2, Y0
 	VPCMPEQB Y1, Y3, Y1
 	VPAND    Y0, Y1, Y0
 
 	// calculate offsets
-	VPMOVMSKB Y0, DX
-	MOVQ      $-1, BX
+	VPMOVMSKB Y0, BX
+	MOVQ      $-1, SI
 
 	// loop over offsets, ie bit positions
 remaining_offsets_loop:
-	CMPL   DX, $0x00
+	CMPL   BX, $0x00
 	JE     remaining_offsets_loop_done
-	TZCNTL DX, BX
-	MOVQ   SI, DI
-	ADDQ   BX, DI
+	TZCNTL BX, SI
+	MOVQ   DI, R8
+	ADDQ   SI, R8
 
 	// test chunk
 	// compare two slices
-	MOVQ CX, R8
-	MOVQ AX, R9
+	MOVQ CX, R9
+	MOVQ AX, R10
 
 remaining_memcmp_loop:
 	// the loop is done; the chunks must be equal
-	CMPQ R8, $0x00
+	CMPQ R9, $0x00
 	JE   remaining_memcmp_loop_done
-	MOVB (R9), R10
-	CMPB (DI), R10
+	MOVB (R10), R11
+	CMPB (R8), R11
 	JNE  remaining_memcmp_loop_done
-	ADDQ $0x01, DI
-	ADDQ $0x01, R9
-	DECQ R8
+	ADDQ $0x01, R8
+	ADDQ $0x01, R10
+	DECQ R9
 	JMP  remaining_memcmp_loop
 
 remaining_memcmp_loop_done:
 	// break early on a match
-	CMPQ R8, $0x00
+	CMPQ R9, $0x00
 	JE   remaining_chunk_match
-	MOVL DX, BX
-	DECL BX
-	ANDL BX, DX
+	MOVL BX, SI
+	DECL SI
+	ANDL SI, BX
 	JMP  remaining_offsets_loop
 
 remaining_offsets_loop_done:
-	MOVQ $-1, BX
+	MOVQ $-1, SI
 
 remaining_chunk_match:
-	MOVQ BX, R9
+	MOVQ SI, R9
 	JMP  match_remaining_done
 
 not_enough_bytes_left:
 	MOVQ $-1, R9
 
 match_remaining_done:
+	CMPQ R9, $0x00
+	JGE  matched
+
 not_matched:
 	MOVQ R9, ret+48(FP)
-	RET
-
-// func matchRemaining(needle []byte, haystack []byte) int64
-// Requires: AVX, AVX2, BMI
-TEXT ·matchRemaining(SB), NOSPLIT, $0-56
-	MOVQ     needle_base+0(FP), DX
-	MOVQ     needle_len+8(FP), BX
-	DECQ     BX
-	MOVQ     haystack_base+24(FP), CX
-	MOVQ     CX, SI
-	ADDQ     haystack_len+32(FP), SI
-	MOVQ     AX, CX
-	SUBQ     $0x20, DI
-	MOVQ     AX, CX
-	MOVQ     SI, CX
-	SUBQ     AX, CX
-	CMPQ     CX, BX
-	JGE      not_enough_bytes_left
-	MOVQ     DI, AX
-	ADDQ     BX, AX
-	VMOVDQU  (DI), Y1
-	VMOVDQU  (AX), Y2
-	VPCMPEQB Y0, Y1, Y1
-	VPCMPEQB Y0, Y2, Y0
-	VPAND    Y1, Y0, Y0
-
-	// calculate offsets
-	VPMOVMSKB Y0, AX
-	MOVQ      $-1, CX
-
-	// loop over offsets, ie bit positions
-remaining_offsets_loop:
-	CMPL   AX, $0x00
-	JE     remaining_offsets_loop_done
-	TZCNTL AX, CX
-	MOVQ   DI, SI
-	ADDQ   CX, SI
-
-	// test chunk
-	// compare two slices
-	MOVQ BX, R8
-	MOVQ DX, R9
-
-remaining_memcmp_loop:
-	// the loop is done; the chunks must be equal
-	CMPQ R8, $0x00
-	JE   remaining_memcmp_loop_done
-	MOVB (R9), R10
-	CMPB (SI), R10
-	JNE  remaining_memcmp_loop_done
-	ADDQ $0x01, SI
-	ADDQ $0x01, R9
-	DECQ R8
-	JMP  remaining_memcmp_loop
-
-remaining_memcmp_loop_done:
-	// break early on a match
-	CMPQ R8, $0x00
-	JE   remaining_chunk_match
-	MOVL AX, CX
-	DECL CX
-	ANDL CX, AX
-	JMP  remaining_offsets_loop
-
-remaining_offsets_loop_done:
-	MOVQ $-1, CX
-
-remaining_chunk_match:
-	MOVQ CX, AX
-	JMP  match_remaining_done
-
-not_enough_bytes_left:
-	MOVQ $-1, AX
-
-match_remaining_done:
-	MOVQ AX, ret+48(FP)
 	RET
