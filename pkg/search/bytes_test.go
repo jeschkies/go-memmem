@@ -2,9 +2,9 @@ package search
 
 import (
 	"archive/zip"
-	//"bytes"
+	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"testing"
 
@@ -133,8 +133,8 @@ func BenchmarkIndexSmall(b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		//i := bytes.Index(haystack, needle)
-		i := Index(haystack, needle)
+		i := bytes.Index(haystack, needle)
+		//i := Index(haystack, needle)
 		if i == -1 {
 			b.Fail()
 		}
@@ -152,8 +152,8 @@ func BenchmarkIndexBig(b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		//i := bytes.Index(haystack, needle)
-		i := Index(haystack, needle)
+		i := bytes.Index(haystack, needle)
+		//i := Index(haystack, needle)
 		if i == -1 {
 			b.Fail()
 		}
@@ -171,5 +171,5 @@ func loadHaystack(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ioutil.ReadAll(f)
+	return io.ReadAll(f)
 }
