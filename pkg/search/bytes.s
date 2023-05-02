@@ -38,21 +38,23 @@ test_offsets_loop:
 	// test chunk
 	// compare two slices
 	MOVQ CX, R8
+
+	// compare two slices one byte at a time
 	MOVQ DX, R9
 
-test_memcmp_loop:
-	// the loop is done; the chunks must be equal
+test_memcmp_one_loop:
+	// loop by one byte
 	CMPQ R8, $0x00
-	JE   test_memcmp_loop_done
+	JE   test_memcmp_one_loop_done
 	MOVB (R9), R10
 	CMPB (DI), R10
-	JNE  test_memcmp_loop_done
+	JNE  test_memcmp_one_loop_done
 	ADDQ $0x01, DI
 	ADDQ $0x01, R9
 	DECQ R8
-	JMP  test_memcmp_loop
+	JMP  test_memcmp_one_loop
 
-test_memcmp_loop_done:
+test_memcmp_one_loop_done:
 	// break early on a match
 	CMPQ R8, $0x00
 	JE   test_chunk_match
@@ -114,21 +116,23 @@ main_offsets_loop:
 	// test chunk
 	// compare two slices
 	MOVQ CX, R11
+
+	// compare two slices one byte at a time
 	MOVQ AX, R12
 
-main_memcmp_loop:
-	// the loop is done; the chunks must be equal
+main_memcmp_one_loop:
+	// loop by one byte
 	CMPQ R11, $0x00
-	JE   main_memcmp_loop_done
+	JE   main_memcmp_one_loop_done
 	MOVB (R12), R13
 	CMPB (R10), R13
-	JNE  main_memcmp_loop_done
+	JNE  main_memcmp_one_loop_done
 	ADDQ $0x01, R10
 	ADDQ $0x01, R12
 	DECQ R11
-	JMP  main_memcmp_loop
+	JMP  main_memcmp_one_loop
 
-main_memcmp_loop_done:
+main_memcmp_one_loop_done:
 	// break early on a match
 	CMPQ R11, $0x00
 	JE   main_chunk_match
@@ -186,21 +190,23 @@ remaining_offsets_loop:
 	// test chunk
 	// compare two slices
 	MOVQ CX, R9
+
+	// compare two slices one byte at a time
 	MOVQ AX, R10
 
-remaining_memcmp_loop:
-	// the loop is done; the chunks must be equal
+remaining_memcmp_one_loop:
+	// loop by one byte
 	CMPQ R9, $0x00
-	JE   remaining_memcmp_loop_done
+	JE   remaining_memcmp_one_loop_done
 	MOVB (R10), R11
 	CMPB (R8), R11
-	JNE  remaining_memcmp_loop_done
+	JNE  remaining_memcmp_one_loop_done
 	ADDQ $0x01, R8
 	ADDQ $0x01, R10
 	DECQ R9
-	JMP  remaining_memcmp_loop
+	JMP  remaining_memcmp_one_loop
 
-remaining_memcmp_loop_done:
+remaining_memcmp_one_loop_done:
 	// break early on a match
 	CMPQ R9, $0x00
 	JE   remaining_chunk_match
