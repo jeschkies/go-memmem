@@ -1,6 +1,7 @@
 package search
 
 import (
+	//"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -122,7 +123,8 @@ func TestMask(t *testing.T) {
 }
 
 func BenchmarkIndex(b *testing.B) {
-	needle := []byte("wontfind")
+	//needle := []byte("wontfind")
+	needle := []byte("greenfelder7267")
 	haystack, err := ioutil.ReadFile("data.log")
 	if err != nil {
 		log.Fatalf(`msg="could not open log file" err=%s`, err)
@@ -130,6 +132,10 @@ func BenchmarkIndex(b *testing.B) {
 	}
 
 	for n := 0; n < 0; n++ {
-		Index(haystack, needle)
+		//i := bytes.Index(haystack, needle)
+		i := Index(haystack, needle)
+		if i == -1 {
+			b.Fail()
+		}
 	}
 }
