@@ -2,7 +2,7 @@ package search
 
 import (
 	"archive/zip"
-	"bytes"
+	//"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -33,6 +33,11 @@ func TestSimpleIndex(t *testing.T) {
 			[]byte(`amet`),
 			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
 			int64(22),
+		},
+		{
+			[]byte(`consectetur`),
+			[]byte(`Lorem ipsum dolor sit amet, consectetur adipiscing elit integer.`),
+			int64(28),
 		},
 		{
 			[]byte(`no match`),
@@ -133,8 +138,8 @@ func BenchmarkIndexSmall(b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		i := bytes.Index(haystack, needle)
-		//i := Index(haystack, needle)
+		//i := bytes.Index(haystack, needle)
+		i := Index(haystack, needle)
 		if i == -1 {
 			b.Fail()
 		}
@@ -152,8 +157,8 @@ func BenchmarkIndexBig(b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		i := bytes.Index(haystack, needle)
-		//i := Index(haystack, needle)
+		//i := bytes.Index(haystack, needle)
+		i := Index(haystack, needle)
 		if i == -1 {
 			b.Fail()
 		}

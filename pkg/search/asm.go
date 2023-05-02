@@ -194,16 +194,16 @@ func inlineMemcmp(caller string, xPtr, yPtr, size reg.Register) reg.Register {
 
 	i := GP64(); MOVQ(size, i)
 
-	//CMPQ(size, Imm(4))
-	//JGE(LabelRef(caller + "_compare_four_bytes"))
+	CMPQ(size, Imm(4))
+	JGE(LabelRef(caller + "_compare_four_bytes"))
 
 	inlineMemcmpOneByte(caller, xPtr, yPtr, size, i)
-	//JMP(LabelRef(caller + "_memcmp_done"))
+	JMP(LabelRef(caller + "_memcmp_done"))
 
-	//Label(caller + "_compare_four_bytes")
-	//inlineMemcmpFourBytes(caller, xPtr, yPtr, size, i)
+	Label(caller + "_compare_four_bytes")
+	inlineMemcmpFourBytes(caller, xPtr, yPtr, size, i)
 
-	//Label(caller + "_memcmp_done")
+	Label(caller + "_memcmp_done")
 
 	return i
 }
@@ -248,16 +248,15 @@ func inlineMemcmpFourBytes(caller string, xPtr, yPtr, size, i reg.Register) {
 	Comment("loop by four bytes")
 	Label(caller + "_memcmp_four_loop")
 	CMPQ(x, xEnd)
-	JGE(LabelRef(caller + "_memcmp_four_done"))
+	JGE(LabelRef(caller + "_memcmp_four_loop_done"))
 
 	MOVL(Mem{Base: y}, r)
 	CMPL(Mem{Base: x}, r)
 	// Break early
-	JNE(LabelRef(caller + "_memcmp_four_not_equal"))
+	JNE(LabelRef(caller + "_memcmp_four_done"))
 
 	ADDQ(Imm(4), x)
 	ADDQ(Imm(4), y)
-	SUBQ(Imm(4), i)
 	JMP(LabelRef(caller + "_memcmp_four_loop"))
 
 	Label(caller + "_memcmp_four_loop_done")
@@ -265,13 +264,8 @@ func inlineMemcmpFourBytes(caller string, xPtr, yPtr, size, i reg.Register) {
 	Comment("compare last four bytes")
 	MOVL(Mem{Base: yEnd}, r)
 	CMPL(Mem{Base: xEnd}, r)
-	JNE(LabelRef(caller + "_memcmp_four_not_equal"))
-	// 0 means equal
-	XORQ(i, i)
-	JMP(LabelRef(caller + "_memcmp_four_done"))
-
-	Label(caller + "_memcmp_four_not_equal")
-	ADDQ(Imm(1), i)
+	JNE(LabelRef(caller + "_memcmp_four_done"))
+	XORQ(i, i) // 0 means equal
 
 	Label(caller + "_memcmp_four_done")
 }
