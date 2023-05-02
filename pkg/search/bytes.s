@@ -38,21 +38,61 @@ test_offsets_loop:
 	// test chunk
 	// compare two slices
 	MOVQ CX, R8
+	CMPQ CX, $0x04
+	JGE  test_compare_four_bytes
+
+	// compare two slices one byte at a time
 	MOVQ DX, R9
 
-test_memcmp_loop:
-	// the loop is done; the chunks must be equal
+test_memcmp_one_loop:
+	// loop by one byte
 	CMPQ R8, $0x00
-	JE   test_memcmp_loop_done
+	JE   test_memcmp_one_loop_done
 	MOVB (R9), R10
 	CMPB (DI), R10
-	JNE  test_memcmp_loop_done
+	JNE  test_memcmp_one_loop_done
 	ADDQ $0x01, DI
 	ADDQ $0x01, R9
 	DECQ R8
-	JMP  test_memcmp_loop
+	JMP  test_memcmp_one_loop
 
-test_memcmp_loop_done:
+test_memcmp_one_loop_done:
+	JMP test_memcmp_done
+
+test_compare_four_bytes:
+	// compare two slices four bytes at a time
+	MOVQ DI, R9
+	MOVQ DX, R10
+	ADDQ CX, DI
+	SUBQ $0x04, DI
+	MOVQ DX, R11
+	ADDQ CX, R11
+	SUBQ $0x04, R11
+
+	// loop by four bytes
+test_memcmp_four_loop:
+	CMPQ R9, DI
+	JGE  test_memcmp_four_done
+	MOVL (R10), R11
+	CMPL (R9), R11
+	JNE  test_memcmp_four_not_equal
+	ADDQ $0x04, R9
+	ADDQ $0x04, R10
+	SUBQ $0x04, R8
+	JMP  test_memcmp_four_loop
+
+	// compare last four bytes
+	MOVL (R11), R11
+	CMPL (DI), R11
+	JNE  test_memcmp_four_not_equal
+	XORQ R8, R8
+	JMP  test_memcmp_four_done
+
+test_memcmp_four_not_equal:
+	ADDQ $0x01, R8
+
+test_memcmp_four_done:
+test_memcmp_done:
 	// break early on a match
 	CMPQ R8, $0x00
 	JE   test_chunk_match
@@ -114,21 +154,61 @@ main_offsets_loop:
 	// test chunk
 	// compare two slices
 	MOVQ CX, R11
+	CMPQ CX, $0x04
+	JGE  main_compare_four_bytes
+
+	// compare two slices one byte at a time
 	MOVQ AX, R12
 
-main_memcmp_loop:
-	// the loop is done; the chunks must be equal
+main_memcmp_one_loop:
+	// loop by one byte
 	CMPQ R11, $0x00
-	JE   main_memcmp_loop_done
+	JE   main_memcmp_one_loop_done
 	MOVB (R12), R13
 	CMPB (R10), R13
-	JNE  main_memcmp_loop_done
+	JNE  main_memcmp_one_loop_done
 	ADDQ $0x01, R10
 	ADDQ $0x01, R12
 	DECQ R11
-	JMP  main_memcmp_loop
+	JMP  main_memcmp_one_loop
 
-main_memcmp_loop_done:
+main_memcmp_one_loop_done:
+	JMP main_memcmp_done
+
+main_compare_four_bytes:
+	// compare two slices four bytes at a time
+	MOVQ R10, R12
+	MOVQ AX, R13
+	ADDQ CX, R10
+	SUBQ $0x04, R10
+	MOVQ AX, R14
+	ADDQ CX, R14
+	SUBQ $0x04, R14
+
+	// loop by four bytes
+main_memcmp_four_loop:
+	CMPQ R12, R10
+	JGE  main_memcmp_four_done
+	MOVL (R13), R14
+	CMPL (R12), R14
+	JNE  main_memcmp_four_not_equal
+	ADDQ $0x04, R12
+	ADDQ $0x04, R13
+	SUBQ $0x04, R11
+	JMP  main_memcmp_four_loop
+
+	// compare last four bytes
+	MOVL (R14), R14
+	CMPL (R10), R14
+	JNE  main_memcmp_four_not_equal
+	XORQ R11, R11
+	JMP  main_memcmp_four_done
+
+main_memcmp_four_not_equal:
+	ADDQ $0x01, R11
+
+main_memcmp_four_done:
+main_memcmp_done:
 	// break early on a match
 	CMPQ R11, $0x00
 	JE   main_chunk_match
@@ -186,21 +266,61 @@ remaining_offsets_loop:
 	// test chunk
 	// compare two slices
 	MOVQ CX, R9
+	CMPQ CX, $0x04
+	JGE  remaining_compare_four_bytes
+
+	// compare two slices one byte at a time
 	MOVQ AX, R10
 
-remaining_memcmp_loop:
-	// the loop is done; the chunks must be equal
+remaining_memcmp_one_loop:
+	// loop by one byte
 	CMPQ R9, $0x00
-	JE   remaining_memcmp_loop_done
+	JE   remaining_memcmp_one_loop_done
 	MOVB (R10), R11
 	CMPB (R8), R11
-	JNE  remaining_memcmp_loop_done
+	JNE  remaining_memcmp_one_loop_done
 	ADDQ $0x01, R8
 	ADDQ $0x01, R10
 	DECQ R9
-	JMP  remaining_memcmp_loop
+	JMP  remaining_memcmp_one_loop
 
-remaining_memcmp_loop_done:
+remaining_memcmp_one_loop_done:
+	JMP remaining_memcmp_done
+
+remaining_compare_four_bytes:
+	// compare two slices four bytes at a time
+	MOVQ R8, R10
+	MOVQ AX, R11
+	ADDQ CX, R8
+	SUBQ $0x04, R8
+	MOVQ AX, R12
+	ADDQ CX, R12
+	SUBQ $0x04, R12
+
+	// loop by four bytes
+remaining_memcmp_four_loop:
+	CMPQ R10, R8
+	JGE  remaining_memcmp_four_done
+	MOVL (R11), R12
+	CMPL (R10), R12
+	JNE  remaining_memcmp_four_not_equal
+	ADDQ $0x04, R10
+	ADDQ $0x04, R11
+	SUBQ $0x04, R9
+	JMP  remaining_memcmp_four_loop
+
+	// compare last four bytes
+	MOVL (R12), R12
+	CMPL (R8), R12
+	JNE  remaining_memcmp_four_not_equal
+	XORQ R9, R9
+	JMP  remaining_memcmp_four_done
+
+remaining_memcmp_four_not_equal:
+	ADDQ $0x01, R9
+
+remaining_memcmp_four_done:
+remaining_memcmp_done:
 	// break early on a match
 	CMPQ R9, $0x00
 	JE   remaining_chunk_match

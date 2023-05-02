@@ -193,28 +193,85 @@ func inlineMemcmp(caller string, xPtr, yPtr, size reg.Register) reg.Register {
 	Comment("compare two slices")
 
 	i := GP64(); MOVQ(size, i)
+
+	CMPQ(size, Imm(4))
+	JGE(LabelRef(caller + "_compare_four_bytes"))
+
+	inlineMemcmpOneByte(caller, xPtr, yPtr, size, i)
+	JMP(LabelRef(caller + "_memcmp_done"))
+
+	Label(caller + "_compare_four_bytes")
+	inlineMemcmpFourBytes(caller, xPtr, yPtr, size, i)
+
+	Label(caller + "_memcmp_done")
+
+	return i
+}
+
+func inlineMemcmpOneByte(caller string, xPtr, yPtr, size, i reg.Register) {
+	Comment("compare two slices one byte at a time")
+
 	x := GP64(); MOVQ(xPtr, x)
 	y := GP64(); MOVQ(yPtr, y)
-	// TODO: compare more than one byte at a time.
 	r := GP8()
 
-	Label(caller + "_memcmp_loop")
+	Label(caller + "_memcmp_one_loop")
 
-	Comment("the loop is done; the chunks must be equal")
+	Comment("loop by one byte")
 	CMPQ(i, Imm(0))
-	JE(LabelRef(caller + "_memcmp_loop_done"))
+	JE(LabelRef(caller + "_memcmp_one_loop_done"))
 
 	MOVB(Mem{Base: y}, r)
 	CMPB(Mem{Base: x}, r)
 	// Break early
-	JNE(LabelRef(caller + "_memcmp_loop_done"))
+	JNE(LabelRef(caller + "_memcmp_one_loop_done"))
 
 	ADDQ(Imm(1), x)
 	ADDQ(Imm(1), y)
 	DECQ(i)
-	JMP(LabelRef(caller + "_memcmp_loop"))
+	JMP(LabelRef(caller + "_memcmp_one_loop"))
 
 	// do not return anything
-	Label(caller + "_memcmp_loop_done")
-	return i
+	Label(caller + "_memcmp_one_loop_done")
+}
+
+func inlineMemcmpFourBytes(caller string, xPtr, yPtr, size, i reg.Register) {
+	Comment("compare two slices four bytes at a time")
+	x := GP64(); MOVQ(xPtr, x)
+	y := GP64(); MOVQ(yPtr, y)
+
+	xEnd := GP64(); MOVQ(xPtr, xEnd); ADDQ(size, xEnd); SUBQ(Imm(4), xEnd)
+	yEnd := GP64(); MOVQ(yPtr, yEnd); ADDQ(size, yEnd); SUBQ(Imm(4), yEnd)
+
+	r := GP32()
+
+	Comment("loop by four bytes")
+	Label(caller + "_memcmp_four_loop")
+	CMPQ(x, xEnd)
+	JGE(LabelRef(caller + "_memcmp_four_done"))
+
+	MOVL(Mem{Base: y}, r)
+	CMPL(Mem{Base: x}, r)
+	// Break early
+	JNE(LabelRef(caller + "_memcmp_four_not_equal"))
+
+	ADDQ(Imm(4), x)
+	ADDQ(Imm(4), y)
+	SUBQ(Imm(4), i)
+	JMP(LabelRef(caller + "_memcmp_four_loop"))
+
+	Label(caller + "_memcmp_four_loop_done")
+	
+	Comment("compare last four bytes")
+	MOVL(Mem{Base: yEnd}, r)
+	CMPL(Mem{Base: xEnd}, r)
+	JNE(LabelRef(caller + "_memcmp_four_not_equal"))
+	// 0 means equal
+	XORQ(i, i)
+	JMP(LabelRef(caller + "_memcmp_four_done"))
+
+	Label(caller + "_memcmp_four_not_equal")
+	ADDQ(Imm(1), i)
+
+	Label(caller + "_memcmp_four_done")
 }

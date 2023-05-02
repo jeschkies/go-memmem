@@ -1,6 +1,7 @@
 package search
 
 import (
+	"archive/zip"
 	//"bytes"
 	"fmt"
 	"io/ioutil"
@@ -122,10 +123,9 @@ func TestMask(t *testing.T) {
 	}
 }
 
-func BenchmarkIndex(b *testing.B) {
-	//needle := []byte("wontfind")
-	needle := []byte("greenfelder7267")
-	haystack, err := ioutil.ReadFile("data.log")
+func BenchmarkIndexSmall(b *testing.B) {
+	needle := []byte("goldner7875")
+	haystack, err := loadHaystack("small.log")
 	if err != nil {
 		log.Fatalf(`msg="could not open log file" err=%s`, err)
 		b.Fail()
@@ -138,4 +138,36 @@ func BenchmarkIndex(b *testing.B) {
 			b.Fail()
 		}
 	}
+}
+
+func BenchmarkIndexBig(b *testing.B) {
+	//needle := []byte("breitenberg1265")
+	needle := []byte(`77.47.98.232 - - [02/May/2023:10:20:14 +0000] "GET /empower/e-business/whiteboard`)
+	haystack, err := loadHaystack("big.log")
+	if err != nil {
+		log.Fatalf(`msg="could not open log file" err=%s`, err)
+		b.Fail()
+	}
+
+	for n := 0; n < 0; n++ {
+		//i := bytes.Index(haystack, needle)
+		i := Index(haystack, needle)
+		if i == -1 {
+			b.Fail()
+		}
+	}
+}
+
+func loadHaystack(name string) ([]byte, error) {
+	r, err := zip.OpenReader("data.zip")
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	f, err := r.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadAll(f)
 }
