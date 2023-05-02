@@ -130,8 +130,9 @@ func BenchmarkIndexSmall(b *testing.B) {
 		log.Fatalf(`msg="could not open log file" err=%s`, err)
 		b.Fail()
 	}
+	b.ResetTimer()
 
-	for n := 0; n < 0; n++ {
+	for n := 0; n < b.N; n++ {
 		//i := bytes.Index(haystack, needle)
 		i := Index(haystack, needle)
 		if i == -1 {
@@ -148,8 +149,9 @@ func BenchmarkIndexBig(b *testing.B) {
 		log.Fatalf(`msg="could not open log file" err=%s`, err)
 		b.Fail()
 	}
+	b.ResetTimer()
 
-	for n := 0; n < 0; n++ {
+	for n := 0; n < b.N; n++ {
 		//i := bytes.Index(haystack, needle)
 		i := Index(haystack, needle)
 		if i == -1 {

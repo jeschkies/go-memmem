@@ -194,16 +194,16 @@ func inlineMemcmp(caller string, xPtr, yPtr, size reg.Register) reg.Register {
 
 	i := GP64(); MOVQ(size, i)
 
-	CMPQ(size, Imm(4))
-	JGE(LabelRef(caller + "_compare_four_bytes"))
+	//CMPQ(size, Imm(4))
+	//JGE(LabelRef(caller + "_compare_four_bytes"))
 
 	inlineMemcmpOneByte(caller, xPtr, yPtr, size, i)
-	JMP(LabelRef(caller + "_memcmp_done"))
+	//JMP(LabelRef(caller + "_memcmp_done"))
 
-	Label(caller + "_compare_four_bytes")
-	inlineMemcmpFourBytes(caller, xPtr, yPtr, size, i)
+	//Label(caller + "_compare_four_bytes")
+	//inlineMemcmpFourBytes(caller, xPtr, yPtr, size, i)
 
-	Label(caller + "_memcmp_done")
+	//Label(caller + "_memcmp_done")
 
 	return i
 }
