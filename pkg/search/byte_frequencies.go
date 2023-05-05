@@ -1,6 +1,6 @@
 package search
 
-var byteFrequencies = [...]byte{
+var byteFrequencies = [...]uint8{
     55,  // '\x00'
     52,  // '\x01'
     51,  // '\x02'
