@@ -1,4 +1,4 @@
-package search
+package simd 
 
 type RareNeedleBytes struct {
 	rare1i uint8 

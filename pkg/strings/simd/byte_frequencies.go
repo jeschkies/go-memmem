@@ -1,4 +1,4 @@
-package search
+package simd 
 
 var byteFrequencies = [...]uint8{
     55,  // '\x00'

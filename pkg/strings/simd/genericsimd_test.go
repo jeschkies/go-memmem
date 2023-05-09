@@ -1,4 +1,4 @@
-package search
+package simd 
 
 import (
 	"archive/zip"
@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:generate go run asm.go -out bytes.s -stubs bytes.go
+//go:generate go run asm.go -out genericsimd.s -stubs genericsimd.go
 
 func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
