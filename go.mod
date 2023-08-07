@@ -1,4 +1,4 @@
-module github.com/jeschkies/gomemmem
+module github.com/jeschkies/go-memmem
 
 go 1.20
 
