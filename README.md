@@ -9,5 +9,5 @@ The code genereation requires [avo](https://github.com/mmcloughlin/avo):
 
 Generate code with
 ```
-$ go generate
+$ go generate ./ ...
 ```
