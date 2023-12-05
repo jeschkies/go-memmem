@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:generate go run asm.go -out bytes.s -stubs bytes.go
+//go:generate go run asm.go -out bytes_avx512_amd64.s -stubs bytes_avx512_amd64.go
 
 func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
