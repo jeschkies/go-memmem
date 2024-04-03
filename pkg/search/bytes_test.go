@@ -143,6 +143,7 @@ func BenchmarkIndexSmall(b *testing.B) {
 		if i == -1 {
 			b.Fail()
 		}
+		b.SetBytes(int64(i)+int64(len(needle)))
 	}
 }
 
@@ -162,6 +163,7 @@ func BenchmarkIndexBig(b *testing.B) {
 		if i == -1 {
 			b.Fail()
 		}
+		b.SetBytes(int64(i)+int64(len(needle)))
 	}
 }
 
