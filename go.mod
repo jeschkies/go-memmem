@@ -1,6 +1,6 @@
 module github.com/jeschkies/go-memmem
 
-go 1.20
+go 1.22
 
 require (
 	github.com/mmcloughlin/avo v0.5.0
