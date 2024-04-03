@@ -1,9 +1,9 @@
 module github.com/jeschkies/go-memmem
 
-go 1.22
+go 1.21
 
 
-toolchain go1.22.1
+toolchain go1.21.3
 
 require (
 	github.com/mmcloughlin/avo v0.5.0
