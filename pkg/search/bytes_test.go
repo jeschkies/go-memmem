@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:generate go run asm.go -out bytes_avx512_amd64.s -stubs bytes_avx512_amd64.go
+//go:generate go run asm_avx2.go -out bytes_avx2_amd64.s -stubs bytes_avx2_amd64.go
 
 func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
@@ -149,7 +149,8 @@ func BenchmarkIndexSmall(b *testing.B) {
 
 func BenchmarkIndexBig(b *testing.B) {
 	//needle := []byte("breitenberg1265")
-	needle := []byte(`77.47.98.232 - - [02/May/2023:10:20:14 +0000] "GET /empower/e-business/whiteboard`)
+	// log line 200,000.
+	needle := []byte(`40.42.170.227 - jast6265 [02/May/2023:10:20:14 +0000] "POST /markets/transition/enable/deploy HTTP/2.0" 203 13601`)
 	haystack, err := loadHaystack("big.log")
 	if err != nil {
 		log.Fatalf(`msg="could not open log file" err=%s`, err)
