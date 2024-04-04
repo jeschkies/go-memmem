@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/sys/cpu"
 )
 
 //go:generate go run asm_avx2.go -out bytes_avx2_amd64.s -stubs bytes_avx2_amd64.go
+//go:generate go run asm_neon.go -out bytes_neon_arm64.s -stubs bytes_neon_arm64.go
 
 func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
@@ -127,10 +127,6 @@ func TestMask(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestArm(t * testing.T) {
-	require.True(t, cpu.ARM64.HasASIMD)
 }
 
 func BenchmarkIndexSmall(b *testing.B) {
