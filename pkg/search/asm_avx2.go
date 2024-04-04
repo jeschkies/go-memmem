@@ -10,6 +10,7 @@ import (
 
 const MIN_HAYSTACK = 32
 
+// main generates assembly code for AVX2 on AMD64.
 func main() {
 	TEXT("findInChunk", NOSPLIT, "func(needle []byte, haystack []byte) int64")
 	Doc("findInChunk is only generated for testing.")
