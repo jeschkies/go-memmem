@@ -23,8 +23,8 @@ func main() {
 	Store(offset, ReturnIndex(0))
 	RET()
 
-	TEXT("indexAvx512", NOSPLIT, "func(haystack, needle []byte) int64")
-	Doc("indexAvx512 returns the first position the needle is in the haystack.")
+	TEXT("indexAvx2", NOSPLIT, "func(haystack, needle []byte) int64")
+	Doc("indexAvx2 returns the first position the needle is in the haystack.")
 
 	needlePtr := Load(Param("needle").Base(), GP64())
 	needleLenMain := Load(Param("needle").Len(), GP64()); DECQ(needleLenMain)

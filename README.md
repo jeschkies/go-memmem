@@ -13,6 +13,9 @@ Generate code with
 $ go generate ./ ...
 ```
 
+The benchmarks depend on `data.zip` which must be checked out with [Git Large
+File Storage](https://git-lfs.com/).
+
 ## Benchmarks
 
 ```

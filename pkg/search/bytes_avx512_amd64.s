@@ -104,9 +104,9 @@ test_chunk_match:
 	MOVQ SI, ret+48(FP)
 	RET
 
-// func indexAvx512(haystack []byte, needle []byte) int64
+// func indexAvx2(haystack []byte, needle []byte) int64
 // Requires: AVX, AVX2, BMI
-TEXT ·indexAvx512(SB), NOSPLIT, $0-56
+TEXT ·indexAvx2(SB), NOSPLIT, $0-56
 	MOVQ needle_base+24(FP), AX
 	MOVQ needle_len+32(FP), CX
 	DECQ CX
