@@ -44,6 +44,7 @@ func main() {
 
 	Label("chunk_loop")
 
+	//TODO: shortcut if min haystack > len(haystack)
 	// while ptr <= max_ptr
 	CMPQ(ptr, maxPtr)
 	JG(LabelRef("chunk_loop_end"))
@@ -53,7 +54,7 @@ func main() {
 	CMPQ(o, Imm(0))
 	JGE(LabelRef("matched"))
 
-	// ptr += 32 // size of YMM == 256bit
+	// ptr += 32 // size of YMM == 256bit == 32b
 	ADDQ(Imm(32), ptr)
 	JMP(LabelRef("chunk_loop"))
 
@@ -176,7 +177,7 @@ func inlineMatchRemaining(first, last reg.VecVirtual, ptr, endPtr, maxPtr, needl
 	JL(LabelRef("not_enough_bytes_left"))
 
 	// Notice we are using maxPtr instead of ptr.
-	MOVQ(maxPtr, ptr)
+	MOVQ(maxPtr, ptr) // TODO: this is a bug if maxPtr < startPtr
 	o := inlineFindInChunk("remaining", first, last, ptr, needlePtr, needleLen)
 	MOVQ(o, offset)
 	JMP(LabelRef("match_remaining_done"))

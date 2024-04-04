@@ -49,6 +49,11 @@ func TestSimpleIndex(t *testing.T) {
 			[]byte(`Lorem ipsum dolor sit amet, cons|ctetur adipiscing elit integer float.`),
 			int64(64),
 		},
+		{
+			[]byte{32, 98, 97, 114},
+			[]byte{98, 117, 122, 122, 32, 98, 97, 114},
+			int64(4),
+		},
 	} {
 		tt := tt
 		t.Run(fmt.Sprintf("`%s` in `%s`", tt.needle, tt.haystack), func(t *testing.T) {
@@ -56,6 +61,21 @@ func TestSimpleIndex(t *testing.T) {
 			require.Equal(t, tt.index, i)
 		})
 	}
+}
+
+func TestSpecial(t *testing.T) {
+	// TODO: passes here but not in Loki.
+	in := []byte(`foo buzz bar`)
+	ls := []byte(`foo `)
+	i := Index(in, ls)
+	require.Equal(t, i, int64(0))
+
+	in = in[len(ls):]
+	require.Equal(t, string(in), "buzz bar")
+
+	ls = []byte(` bar`)
+	i = Index(in, ls)
+	require.Equal(t, i, int64(4))
 }
 
 func TestMask(t *testing.T) {
