@@ -58,7 +58,7 @@ func main() {
 	CMPQ(o, Imm(0))
 	JGE(LabelRef("matched"))
 
-	ADDQ(Imm(LOOP_SIZE), curPtr)
+	ADDQ(Imm(search.LOOP_SIZE_AVX2), curPtr)
 	JMP(LabelRef("chunk_loop"))
 
 	Label("matched")
