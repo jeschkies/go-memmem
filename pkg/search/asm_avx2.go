@@ -36,7 +36,6 @@ func main() {
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
 
 	// maxPtr == endPtr - LOOP_SIZE
-	// TODO: if LOOP_SIZE > len(haystack) { return int64(bytes.Index(haystack, needle))
 	maxPtr := GP64(); MOVQ(endPtr, maxPtr);
 	SUBQ(Imm(search.LOOP_SIZE_AVX2), maxPtr)
 
