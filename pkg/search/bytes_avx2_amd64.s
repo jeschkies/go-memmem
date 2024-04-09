@@ -15,13 +15,15 @@ TEXT ·findInChunk(SB), NOSPLIT, $0-56
 	ADDQ         CX, BX
 	VPBROADCASTB (DX), Y0
 	VPBROADCASTB (BX), Y1
-	MOVQ         AX, BX
-	ADDQ         CX, BX
-	VMOVDQU      (AX), Y2
-	VMOVDQU      (BX), Y3
-	VPCMPEQB     Y0, Y2, Y0
-	VPCMPEQB     Y1, Y3, Y1
-	VPAND        Y0, Y1, Y0
+
+	// begin test find in chunk
+	MOVQ     AX, BX
+	ADDQ     CX, BX
+	VMOVDQU  (AX), Y2
+	VMOVDQU  (BX), Y3
+	VPCMPEQB Y0, Y2, Y0
+	VPCMPEQB Y1, Y3, Y1
+	VPAND    Y0, Y1, Y0
 
 	// calculate offsets
 	VPMOVMSKB Y0, BX
@@ -101,6 +103,7 @@ test_offsets_loop_done:
 	MOVQ $-1, SI
 
 test_chunk_match:
+	// end test find in chunk
 	MOVQ SI, ret+48(FP)
 	RET
 
@@ -125,8 +128,10 @@ TEXT ·indexAvx2(SB), NOSPLIT, $0-56
 	VPBROADCASTB (R8), Y1
 
 chunk_loop:
-	CMPQ     DI, SI
-	JG       chunk_loop_end
+	CMPQ DI, SI
+	JG   chunk_loop_end
+
+	// begin main find in chunk
 	MOVQ     DI, R8
 	ADDQ     CX, R8
 	VMOVDQU  (DI), Y2
@@ -213,6 +218,7 @@ main_offsets_loop_done:
 	MOVQ $-1, R9
 
 main_chunk_match:
+	// end main find in chunk
 	// break early when offset is >=0.
 	CMPQ R9, $0x00
 	JGE  matched
@@ -229,12 +235,14 @@ matched:
 
 chunk_loop_end:
 	// match remaining bytes if any
-	CMPQ     DI, BX
-	JGE      not_matched
-	SUBQ     DI, BX
-	CMPQ     BX, CX
-	JL       not_enough_bytes_left
-	MOVQ     SI, DI
+	CMPQ DI, BX
+	JGE  not_matched
+	SUBQ DI, BX
+	CMPQ BX, CX
+	JL   not_enough_bytes_left
+	MOVQ SI, DI
+
+	// begin remaining find in chunk
 	MOVQ     DI, BX
 	ADDQ     CX, BX
 	VMOVDQU  (DI), Y2
@@ -321,6 +329,7 @@ remaining_offsets_loop_done:
 	MOVQ $-1, SI
 
 remaining_chunk_match:
+	// end remaining find in chunk
 	MOVQ SI, R9
 	JMP  match_remaining_done
 

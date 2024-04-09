@@ -8,7 +8,7 @@ import (
 	"github.com/mmcloughlin/avo/reg"
 )
 
-const MIN_HAYSTACK = 32
+const LOOP_SIZE = 32 // size of YMM == 256bit == 32b
 
 // main generates assembly code for AVX2 on AMD64.
 func main() {
@@ -34,40 +34,44 @@ func main() {
 	haystackLen, _ := Param("haystack").Len().Resolve()
 	
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
+
+	// maxPtr == endPtr - LOOP_SIZE
+	// TODO: if LOOP_SIZE > len(haystack) { return int64(bytes.Index(haystack, needle))
 	maxPtr := GP64(); MOVQ(endPtr, maxPtr);
-	SUBQ(Imm(MIN_HAYSTACK), maxPtr)
-	SUBQ(needleLenMain, maxPtr)
-	ptr := GP64(); MOVQ(startPtr, ptr)
+	SUBQ(Imm(LOOP_SIZE), maxPtr)
+
+	// TODO: align curPtr https://github.com/BurntSushi/memchr/blob/master/src/arch/generic/memchr.rs#L169
+	curPtr := GP64(); MOVQ(startPtr, curPtr)
 
 	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
 	first, last := inlineSplat(needlePtr, needleLenMain)
 
 	Label("chunk_loop")
 
-	//TODO: shortcut if min haystack > len(haystack)
-	// while ptr <= max_ptr
-	CMPQ(ptr, maxPtr)
+	// TODO: unroll loop
+
+	// while curPtr <= max_ptr
+	CMPQ(curPtr, maxPtr)
 	JG(LabelRef("chunk_loop_end"))
 
-	o := inlineFindInChunk("main", first, last, ptr, needlePtr, needleLenMain)
+	o := inlineFindInChunk("main", first, last, curPtr, needlePtr, needleLenMain)
 	Comment("break early when offset is >=0.")
 	CMPQ(o, Imm(0))
 	JGE(LabelRef("matched"))
 
-	// ptr += 32 // size of YMM == 256bit == 32b
-	ADDQ(Imm(32), ptr)
+	ADDQ(Imm(LOOP_SIZE), curPtr)
 	JMP(LabelRef("chunk_loop"))
 
 	Label("matched")
 	// Return true index
-	inlineMatched(startPtr, ptr, o)
+	inlineMatched(startPtr, curPtr, o)
 
 	Label("chunk_loop_end")
 	Comment("match remaining bytes if any")
-	CMPQ(ptr, endPtr)
+	CMPQ(curPtr, endPtr)
 	JGE(LabelRef("not_matched"))
 
-	inlineMatchRemaining(first, last, ptr, endPtr, maxPtr, needlePtr, needleLenMain, o)
+	inlineMatchRemaining(first, last, curPtr, endPtr, needlePtr, needleLenMain, o)
 	CMPQ(o, Imm(0))
 	JGE(LabelRef("matched"))
 
@@ -105,12 +109,14 @@ func inlineMatched(startPtr, ptr, offset reg.Register) {
 	RET()
 }
 
-func inlineFindInChunk(caller string, first, last reg.VecVirtual, ptr, needlePtr, needleLen reg.Register) reg.Register {
+// inlineFindInChunk compares chunks of the first and last byte with chunks in the haystack.
+func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needlePtr, needleLen reg.Register) reg.Register {
+	Comment("begin " + caller +" find in chunk")
 	chunk0 := YMM()
 	chunk1 := YMM()
 
 	// create chunk0 and chunk1
-	c0 := ptr 
+	c0 := curPtr 
 	c1:= GP64(); MOVQ(c0, c1);
 	ADDQ(needleLen, c1)
 	VMOVDQU(Mem{Base: c0}, chunk0)
@@ -155,6 +161,7 @@ func inlineFindInChunk(caller string, first, last reg.VecVirtual, ptr, needlePtr
 	MOVQ(I64(-1), offset)
 
 	Label(caller + "_chunk_match")
+	Comment("end " + caller +" find in chunk")
 	return offset
 }
 
@@ -168,17 +175,15 @@ func inlineClearLeftmostSet(mask reg.Register) {
 
 // inlineMatchRemaining searches the remaining bytes that are shorter than the
 // vector size.
-func inlineMatchRemaining(first, last reg.VecVirtual, ptr, endPtr, maxPtr, needlePtr, needleLen, offset reg.Register) {
+func inlineMatchRemaining(first, last reg.VecVirtual, curPtr, endPtr, needlePtr, needleLen, offset reg.Register) {
 	// TODO: Could use endPtr instead.
 	remaining := GP64()
 	MOVQ(endPtr, remaining)
-	SUBQ(ptr, remaining)
+	SUBQ(curPtr, remaining)
 	CMPQ(remaining, needleLen)
 	JL(LabelRef("not_enough_bytes_left"))
 
-	// Notice we are using maxPtr instead of ptr.
-	MOVQ(maxPtr, ptr) // TODO: this is a bug if maxPtr < startPtr
-	o := inlineFindInChunk("remaining", first, last, ptr, needlePtr, needleLen)
+	o := inlineFindInChunk("remaining", first, last, curPtr, needlePtr, needleLen)
 	MOVQ(o, offset)
 	JMP(LabelRef("match_remaining_done"))
 

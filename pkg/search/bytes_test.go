@@ -50,8 +50,8 @@ func TestSimpleIndex(t *testing.T) {
 			int64(64),
 		},
 		{
-			[]byte{32, 98, 97, 114},
-			[]byte{98, 117, 122, 122, 32, 98, 97, 114},
+			[]byte(` bar`),
+			[]byte(`bazz bar some more words to hit thirty two bytes`),
 			int64(4),
 		},
 	} {
@@ -68,14 +68,14 @@ func TestSpecial(t *testing.T) {
 	in := []byte(`foo buzz bar`)
 	ls := []byte(`foo `)
 	i := Index(in, ls)
-	require.Equal(t, i, int64(0))
+	require.Equal(t, int64(0), i)
 
 	in = in[len(ls):]
 	require.Equal(t, string(in), "buzz bar")
 
 	ls = []byte(` bar`)
 	i = Index(in, ls)
-	require.Equal(t, i, int64(4))
+	require.Equal(t, int64(4), i)
 }
 
 func TestMask(t *testing.T) {
