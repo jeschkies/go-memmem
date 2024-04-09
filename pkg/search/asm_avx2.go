@@ -6,9 +6,9 @@ import (
 	. "github.com/mmcloughlin/avo/build"
 	. "github.com/mmcloughlin/avo/operand"
 	"github.com/mmcloughlin/avo/reg"
-)
 
-const LOOP_SIZE = 32 // size of YMM == 256bit == 32b
+	"github.com/jeschkies/go-memmem/pkg/search"
+)
 
 // main generates assembly code for AVX2 on AMD64.
 func main() {
@@ -38,7 +38,7 @@ func main() {
 	// maxPtr == endPtr - LOOP_SIZE
 	// TODO: if LOOP_SIZE > len(haystack) { return int64(bytes.Index(haystack, needle))
 	maxPtr := GP64(); MOVQ(endPtr, maxPtr);
-	SUBQ(Imm(LOOP_SIZE), maxPtr)
+	SUBQ(Imm(search.LOOP_SIZE_AVX2), maxPtr)
 
 	// TODO: align curPtr https://github.com/BurntSushi/memchr/blob/master/src/arch/generic/memchr.rs#L169
 	curPtr := GP64(); MOVQ(startPtr, curPtr)
