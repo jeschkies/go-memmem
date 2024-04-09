@@ -118,7 +118,6 @@ TEXT ·indexAvx2(SB), NOSPLIT, $0-56
 	ADDQ haystack_len+8(FP), BX
 	MOVQ BX, SI
 	SUBQ $0x20, SI
-	SUBQ CX, SI
 	MOVQ DX, DI
 
 	// create vector filled with first and last character
@@ -240,7 +239,6 @@ chunk_loop_end:
 	SUBQ DI, BX
 	CMPQ BX, CX
 	JL   not_enough_bytes_left
-	MOVQ SI, DI
 
 	// begin remaining find in chunk
 	MOVQ     DI, BX
