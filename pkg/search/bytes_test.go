@@ -193,7 +193,7 @@ func loadHaystack(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer r.Close() //nolint:errcheck
 
 	f, err := r.Open(name)
 	if err != nil {
