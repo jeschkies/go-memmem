@@ -137,7 +137,7 @@ func TestMask(t *testing.T) {
 		},
 	} {
 		tt := tt
-		t.Run(fmt.Sprintf(tt.name), func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			index := findInChunk(tt.needle, tt.haystack)
 			require.Equal(t, tt.index, index)
 			if index != -1 {
@@ -193,7 +193,7 @@ func loadHaystack(name string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer r.Close()
+	defer r.Close() //nolint:errcheck
 
 	f, err := r.Open(name)
 	if err != nil {
