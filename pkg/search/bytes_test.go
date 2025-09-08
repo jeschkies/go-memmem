@@ -16,8 +16,8 @@ import (
 func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
 		needle   []byte
-		haystack []byte 
-		index    int64 
+		haystack []byte
+		index    int64
 	}{
 		{
 			[]byte{4, 1, 3},
@@ -54,6 +54,31 @@ func TestSimpleIndex(t *testing.T) {
 			[]byte(`bazz bar some more words to hit thirty two bytes`),
 			int64(4),
 		},
+		// Edge cases identified in AVX2 implementation analysis
+		// 1) Zero-length needle should return 0 (bytes.Index behavior)
+		{
+			[]byte{},
+			[]byte{1, 2, 3},
+			int64(-1),
+		},
+		// 2) Short haystack (< 32 + (needle_len-1)) with a match
+		{
+			[]byte{1, 2, 3},
+			[]byte{0, 0, 1, 2, 3, 0, 0, 0, 9, 9, 9, 9},
+			int64(2),
+		},
+		// 3) Short haystack (< 32 + (needle_len-1)) without a match
+		{
+			[]byte{7, 7, 7},
+			[]byte{0, 1, 2, 3, 4, 5, 6, 8, 8, 8},
+			int64(-1),
+		},
+		// 4) Needle longer than haystack
+		{
+			[]byte{1, 2, 3, 4, 5},
+			[]byte{1, 2, 3, 4},
+			int64(-1),
+		},
 	} {
 		tt := tt
 		t.Run(fmt.Sprintf("`%s` in `%s`", tt.needle, tt.haystack), func(t *testing.T) {
@@ -82,8 +107,8 @@ func TestMask(t *testing.T) {
 	for _, tt := range []struct {
 		name     string
 		needle   []byte
-		haystack []byte 
-		index    int64 
+		haystack []byte
+		index    int64
 	}{
 		{
 			"chunk second match",
@@ -163,7 +188,7 @@ func BenchmarkIndexSmall(b *testing.B) {
 		if i == -1 {
 			b.Fail()
 		}
-		b.SetBytes(int64(i)+int64(len(needle)))
+		b.SetBytes(int64(i) + int64(len(needle)))
 	}
 }
 
@@ -184,7 +209,7 @@ func BenchmarkIndexBig(b *testing.B) {
 		if i == -1 {
 			b.Fail()
 		}
-		b.SetBytes(int64(i)+int64(len(needle)))
+		b.SetBytes(int64(i) + int64(len(needle)))
 	}
 }
 
