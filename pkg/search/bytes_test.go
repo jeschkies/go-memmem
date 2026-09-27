@@ -59,7 +59,7 @@ func TestSimpleIndex(t *testing.T) {
 		{
 			[]byte{},
 			[]byte{1, 2, 3},
-			int64(-1),
+			int64(0),
 		},
 		// 2) Short haystack (< 32 + (needle_len-1)) with a match
 		{
