@@ -1,3 +1,10 @@
+//go:build amd64
+
+// This file exercises the amd64-only AVX2 code path. The findInChunk symbol
+// referenced by TestMask is only declared in bytes_avx2_amd64.go, so this
+// entire file must be gated to amd64. Architecture-agnostic coverage of the
+// public Index API lives in api_test.go.
+
 package search
 
 import (
@@ -80,7 +87,6 @@ func TestSimpleIndex(t *testing.T) {
 			int64(-1),
 		},
 	} {
-		tt := tt
 		t.Run(fmt.Sprintf("`%s` in `%s`", tt.needle, tt.haystack), func(t *testing.T) {
 			i := Index(tt.haystack, tt.needle)
 			require.Equal(t, tt.index, i)
@@ -161,7 +167,6 @@ func TestMask(t *testing.T) {
 			int64(22),
 		},
 	} {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			index := findInChunk(tt.needle, tt.haystack)
 			require.Equal(t, tt.index, index)
@@ -180,9 +185,7 @@ func BenchmarkIndexSmall(b *testing.B) {
 		log.Fatalf(`msg="could not open log file" err=%s`, err)
 		b.Fail()
 	}
-	b.ResetTimer()
-
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		//i := bytes.Index(haystack, needle)
 		i := Index(haystack, needle)
 		if i == -1 {
@@ -201,9 +204,8 @@ func BenchmarkIndexBig(b *testing.B) {
 		log.Fatalf(`msg="could not open log file" err=%s`, err)
 		b.Fail()
 	}
-	b.ResetTimer()
 
-	for n := 0; n < b.N; n++ {
+	for b.Loop() {
 		//i := bytes.Index(haystack, needle)
 		i := Index(haystack, needle)
 		if i == -1 {
