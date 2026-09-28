@@ -135,7 +135,5 @@ func TestLokiRepro_MultiLineBufferAgreesWithNaiveScan(t *testing.T) {
 		}
 	}
 
-	if mismatches > 0 {
-		t.Errorf("batch scan disagreed with naive per-line scan on %d/%d trials (see logs above)", mismatches, trials)
-	}
+	require.Equalf(t, 0, mismatches, "batch scan disagreed with naive per-line scan on %d/%d trials (see logs above)", mismatches, trials)
 }
