@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"math/rand"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // TestLokiRepro_ShortHaystackAgreesWithBytesIndex reproduces the stress test
@@ -47,9 +49,7 @@ func TestLokiRepro_ShortHaystackAgreesWithBytesIndex(t *testing.T) {
 		}
 	}
 
-	if mismatches > 0 {
-		t.Errorf("Index disagreed with bytes.Index on %d/%d trials (see logs above)", mismatches, trials)
-	}
+	require.Equalf(t, 0, mismatches, "Index disagreed with bytes.Index on %d/%d trials (see logs above)", mismatches, trials)
 }
 
 // TestLokiRepro_MultiLineBufferAgreesWithNaiveScan reproduces the exact
