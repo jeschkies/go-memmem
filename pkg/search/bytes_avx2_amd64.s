@@ -11,14 +11,12 @@ TEXT ·findInChunk(SB), NOSPLIT, $0-56
 	MOVQ needle_base+0(FP), DX
 
 	// create vector filled with first and last character
-	MOVQ         DX, BX
-	ADDQ         CX, BX
+	LEAQ         (DX)(CX*1), BX
 	VPBROADCASTB (DX), Y0
 	VPBROADCASTB (BX), Y1
 
 	// begin test find in chunk
-	MOVQ     AX, BX
-	ADDQ     CX, BX
+	LEAQ     (AX)(CX*1), BX
 	VMOVDQU  (AX), Y2
 	VMOVDQU  (BX), Y3
 	VPCMPEQB Y0, Y2, Y0
@@ -29,15 +27,18 @@ TEXT ·findInChunk(SB), NOSPLIT, $0-56
 	VPMOVMSKB Y0, BX
 	MOVQ      $-1, SI
 
+	// pre-shift memcmp inputs to skip already-verified bytes
+	LEAQ 1(DX), DX
+	LEAQ -1(CX), CX
+
 	// loop over offsets, ie bit positions
 test_offsets_loop:
 	CMPL   BX, $0x00
 	JE     test_offsets_loop_done
 	TZCNTL BX, SI
-	MOVQ   AX, DI
-	ADDQ   SI, DI
+	LEAQ   1(AX)(SI*1), DI
 
-	// test chunk
+	// test chunk (interior only)
 	// compare two slices
 	MOVQ CX, R8
 	CMPQ CX, $0x04
@@ -65,11 +66,8 @@ test_compare_four_bytes:
 	// compare two slices four bytes at a time
 	MOVQ DI, R9
 	MOVQ DX, R10
-	ADDQ CX, DI
-	SUBQ $0x04, DI
-	MOVQ DX, R11
-	ADDQ CX, R11
-	SUBQ $0x04, R11
+	LEAQ -4(DI)(CX*1), DI
+	LEAQ -4(DX)(CX*1), R11
 
 	// loop by four bytes
 test_memcmp_four_loop:
@@ -105,11 +103,12 @@ test_offsets_loop_done:
 test_chunk_match:
 	// end test find in chunk
 	MOVQ SI, ret+48(FP)
+	VZEROUPPER
 	RET
 
 // func indexAvx2(haystack []byte, needle []byte) int64
 // Requires: AVX, AVX2, BMI
-TEXT ·indexAvx2(SB), NOSPLIT, $0-56
+TEXT ·indexAvx2(SB), NOSPLIT, $8-56
 	MOVQ needle_base+24(FP), AX
 	MOVQ needle_len+32(FP), CX
 	DECQ CX
@@ -121,15 +120,13 @@ TEXT ·indexAvx2(SB), NOSPLIT, $0-56
 	MOVQ DX, SI
 
 	// create vector filled with first and last character
-	MOVQ         AX, DI
-	ADDQ         CX, DI
+	LEAQ         (AX)(CX*1), DI
 	VPBROADCASTB (AX), Y0
 	VPBROADCASTB (DI), Y1
 
 chunk_loop:
 	// begin main find in chunk
-	MOVQ     SI, DI
-	ADDQ     CX, DI
+	LEAQ     (SI)(CX*1), DI
 	VMOVDQU  (SI), Y2
 	VMOVDQU  (DI), Y3
 	VPCMPEQB Y0, Y2, Y2
@@ -140,33 +137,36 @@ chunk_loop:
 	VPMOVMSKB Y2, DI
 	MOVQ      $-1, R8
 
+	// pre-shift memcmp inputs to skip already-verified bytes
+	LEAQ 1(AX), R9
+	LEAQ -1(CX), R10
+
 	// loop over offsets, ie bit positions
 main_offsets_loop:
 	CMPL   DI, $0x00
 	JE     main_offsets_loop_done
 	TZCNTL DI, R8
-	MOVQ   SI, R9
-	ADDQ   R8, R9
+	LEAQ   1(SI)(R8*1), R11
 
-	// test chunk
+	// test chunk (interior only)
 	// compare two slices
-	MOVQ CX, R10
-	CMPQ CX, $0x04
+	MOVQ R10, R12
+	CMPQ R10, $0x04
 	JGE  main_compare_four_bytes
 
 	// compare two slices one byte at a time
-	MOVQ AX, R11
+	MOVQ R9, R13
 
 main_memcmp_one_loop:
 	// loop by one byte
-	CMPQ R10, $0x00
+	CMPQ R12, $0x00
 	JE   main_memcmp_one_loop_done
-	MOVB (R11), R12
-	CMPB (R9), R12
+	MOVB (R13), R14
+	CMPB (R11), R14
 	JNE  main_memcmp_one_loop_done
-	ADDQ $0x01, R9
 	ADDQ $0x01, R11
-	DECQ R10
+	ADDQ $0x01, R13
+	DECQ R12
 	JMP  main_memcmp_one_loop
 
 main_memcmp_one_loop_done:
@@ -174,36 +174,33 @@ main_memcmp_one_loop_done:
 
 main_compare_four_bytes:
 	// compare two slices four bytes at a time
-	MOVQ R9, R11
-	MOVQ AX, R12
-	ADDQ CX, R9
-	SUBQ $0x04, R9
-	MOVQ AX, R13
-	ADDQ CX, R13
-	SUBQ $0x04, R13
+	MOVQ R11, R13
+	MOVQ R9, R14
+	LEAQ -4(R11)(R10*1), R11
+	LEAQ -4(R9)(R10*1), R15
 
 	// loop by four bytes
 main_memcmp_four_loop:
-	CMPQ R11, R9
+	CMPQ R13, R11
 	JGE  main_memcmp_four_loop_done
-	MOVL (R12), R14
-	CMPL (R11), R14
+	MOVL (R14), BP
+	CMPL (R13), BP
 	JNE  main_memcmp_four_done
-	ADDQ $0x04, R11
-	ADDQ $0x04, R12
+	ADDQ $0x04, R13
+	ADDQ $0x04, R14
 	JMP  main_memcmp_four_loop
 
 main_memcmp_four_loop_done:
 	// compare last four bytes
-	MOVL (R13), R14
-	CMPL (R9), R14
+	MOVL (R15), BP
+	CMPL (R11), BP
 	JNE  main_memcmp_four_done
-	XORQ R10, R10
+	XORQ R12, R12
 
 main_memcmp_four_done:
 main_memcmp_done:
 	// break early on a match
-	CMPQ R10, $0x00
+	CMPQ R12, $0x00
 	JE   main_chunk_match
 	MOVL DI, R8
 	DECL R8
@@ -236,8 +233,10 @@ matched:
 	SUBQ DX, AX
 	ADDQ R8, AX
 	MOVQ AX, ret+48(FP)
+	VZEROUPPER
 	RET
 
 not_matched:
 	MOVQ R8, ret+48(FP)
+	VZEROUPPER
 	RET
