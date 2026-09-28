@@ -22,6 +22,7 @@ func main() {
 	offset := inlineFindInChunk("test", f, l, hptr, needle, needleLen)
 
 	Store(offset, ReturnIndex(0))
+	VZEROUPPER()
 	RET()
 
 	TEXT("indexAvx2", NOSPLIT, "func(haystack, needle []byte) int64")
@@ -80,6 +81,7 @@ func main() {
 	Label("not_matched")
 	ret, _ := ReturnIndex(0).Resolve()
 	MOVQ(o, ret.Addr)
+	VZEROUPPER()
 	RET()
 
 	Generate()
@@ -92,8 +94,8 @@ func inlineSplat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtua
 	f := YMM()
 	l := YMM()
 
-	needle1 := GP64(); MOVQ(needle0, needle1);
-	ADDQ(needleLen, needle1)
+	needle1 := GP64()
+	LEAQ(Mem{Base: needle0, Index: needleLen, Scale: 1}, needle1)
 	VPBROADCASTB(Mem{Base: needle0}, f)
 	VPBROADCASTB(Mem{Base: needle1}, l)
 
@@ -108,19 +110,20 @@ func inlineMatched(startPtr, ptr, offset reg.Register) {
 	SUBQ(startPtr, i)
 	ADDQ(offset, i)
 	Store(i, ReturnIndex(0))
+	VZEROUPPER()
 	RET()
 }
 
 // inlineFindInChunk compares chunks of the first and last byte with chunks in the haystack.
 func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needlePtr, needleLen reg.Register) reg.Register {
-	Comment("begin " + caller +" find in chunk")
+	Comment("begin " + caller + " find in chunk")
 	chunk0 := YMM()
 	chunk1 := YMM()
 
 	// create chunk0 and chunk1
-	c0 := curPtr 
-	c1:= GP64(); MOVQ(c0, c1);
-	ADDQ(needleLen, c1)
+	c0 := curPtr
+	c1 := GP64()
+	LEAQ(Mem{Base: c0, Index: needleLen, Scale: 1}, c1)
 	VMOVDQU(Mem{Base: c0}, chunk0)
 	VMOVDQU(Mem{Base: c1}, chunk1)
 
@@ -132,12 +135,22 @@ func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needle
 
 	mask := YMM()
 	VPAND(eq0, eq1, mask)
-	
+
 	Comment("calculate offsets")
 	offsets := GP32()
 	VPMOVMSKB(mask, offsets)
 	offset := GP64()
 	MOVQ(I64(-1), offset)
+
+	// The mask already proves the first and last needle byte match, so the
+	// memcmp only needs to verify the interior needleLen-2 bytes. Pre-shift
+	// the needle pointer past byte 0 and the size down by one; the +1 on
+	// the candidate pointer is folded into the LEAQ inside the offsets loop.
+	Comment("pre-shift memcmp inputs to skip already-verified bytes")
+	nPtrShifted := GP64()
+	LEAQ(Mem{Base: needlePtr, Disp: 1}, nPtrShifted)
+	sizeShifted := GP64()
+	LEAQ(Mem{Base: needleLen, Disp: -1}, sizeShifted)
 
 	Comment("loop over offsets, ie bit positions")
 	Label(caller + "_offsets_loop")
@@ -146,11 +159,11 @@ func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needle
 
 	TZCNTL(offsets, offset.As32())
 
-	chunkPtr := GP64(); MOVQ(c0, chunkPtr)
-	ADDQ(offset.As64(), chunkPtr)
+	chunkPtr := GP64()
+	LEAQ(Mem{Base: c0, Index: offset.As64(), Scale: 1, Disp: 1}, chunkPtr)
 
-	Comment("test chunk")
-	cmpIndex := inlineMemcmp(caller, chunkPtr, needlePtr, needleLen)
+	Comment("test chunk (interior only)")
+	cmpIndex := inlineMemcmp(caller, chunkPtr, nPtrShifted, sizeShifted)
 	Comment("break early on a match")
 	CMPQ(cmpIndex, Imm(0))
 	JE(LabelRef(caller + "_chunk_match"))
@@ -163,7 +176,7 @@ func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needle
 	MOVQ(I64(-1), offset)
 
 	Label(caller + "_chunk_match")
-	Comment("end " + caller +" find in chunk")
+	Comment("end " + caller + " find in chunk")
 	return offset
 }
 
@@ -228,8 +241,10 @@ func inlineMemcmpFourBytes(caller string, xPtr, yPtr, size, i reg.Register) {
 	x := GP64(); MOVQ(xPtr, x)
 	y := GP64(); MOVQ(yPtr, y)
 
-	xEnd := GP64(); MOVQ(xPtr, xEnd); ADDQ(size, xEnd); SUBQ(Imm(4), xEnd)
-	yEnd := GP64(); MOVQ(yPtr, yEnd); ADDQ(size, yEnd); SUBQ(Imm(4), yEnd)
+	xEnd := GP64()
+	LEAQ(Mem{Base: xPtr, Index: size, Scale: 1, Disp: -4}, xEnd)
+	yEnd := GP64()
+	LEAQ(Mem{Base: yPtr, Index: size, Scale: 1, Disp: -4}, yEnd)
 
 	r := GP32()
 
