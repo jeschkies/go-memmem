@@ -16,11 +16,11 @@ jobs:
       - name: Lint 
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.4.0
+          version: v2.14.0
   build:
     strategy:
       matrix:
-        os: [ubuntu-22.04, macos-13]
+        os: [ubuntu-22.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
