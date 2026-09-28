@@ -9,7 +9,7 @@ package search
 
 import (
 	"archive/zip"
-	//"bytes"
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -84,6 +84,18 @@ func TestSimpleIndex(t *testing.T) {
 		{
 			[]byte{1, 2, 3, 4, 5},
 			[]byte{1, 2, 3, 4},
+			int64(-1),
+		},
+		// 5) Match at the last candidate position — reachable only via the clamped final scan.
+		{
+			[]byte{9, 9, 9},
+			append(bytes.Repeat([]byte{0}, 37), 9, 9, 9),
+			int64(37),
+		},
+		// 6) Same layout with a first+last-byte hit in the tail; memcmp must reject.
+		{
+			[]byte{9, 9, 9},
+			append(bytes.Repeat([]byte{0}, 37), 9, 0, 9),
 			int64(-1),
 		},
 	} {
