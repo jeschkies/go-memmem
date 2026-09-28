@@ -5,5 +5,5 @@ package search
 // findInChunk is only generated for testing.
 func findInChunk(needle []byte, haystack []byte) int64
 
-// indexAvx2 returns the first position the needle is in the haystack. The caller must ensure len(needle) >= 1 and len(haystack) >= LOOP_SIZE_AVX2 + len(needle) - 1.
-func indexAvx2(haystack []byte, needle []byte) int64
+// indexAvx2 returns the first position the needle is in the haystack. The caller must ensure len(needle) >= 1, idx1 and idx2 are distinct valid indices into needle (see SelectPair), and len(haystack) >= LOOP_SIZE_AVX2 + len(needle) - 1.
+func indexAvx2(haystack []byte, needle []byte, idx1 int, idx2 int) int64

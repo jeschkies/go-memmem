@@ -15,41 +15,60 @@ func main() {
 	TEXT("findInChunk", NOSPLIT, "func(needle []byte, haystack []byte) int64")
 	Doc("findInChunk is only generated for testing.")
 	hptr := Load(Param("haystack").Base(), GP64())
-	needleLen := Load(Param("needle").Len(), GP64()); DECQ(needleLen)
+	needleLen := Load(Param("needle").Len(), GP64())
 	needle := Load(Param("needle").Base(), GP64())
-	f, l := inlineSplat(needle, needleLen)
 
-	offset := inlineFindInChunk("test", f, l, hptr, needle, needleLen)
+	// findInChunk always tests the needle's first and last byte, matching
+	// its behavior before rare-byte selection existed - it's a testing-only
+	// helper for a single chunk, not the real search entry point.
+	idx1 := GP64(); MOVQ(I64(0), idx1)
+	idx2 := GP64(); MOVQ(needleLen, idx2); DECQ(idx2)
+
+	f, l := inlineSplat(needle, idx1, idx2)
+
+	offset := inlineFindInChunk("test", f, l, hptr, idx1, idx2, needle, needleLen)
 
 	Store(offset, ReturnIndex(0))
 	VZEROUPPER()
 	RET()
 
-	TEXT("indexAvx2", NOSPLIT, "func(haystack, needle []byte) int64")
+	TEXT("indexAvx2", NOSPLIT, "func(haystack, needle []byte, idx1, idx2 int) int64")
 	Doc("indexAvx2 returns the first position the needle is in the haystack. " +
-		"The caller must ensure len(needle) >= 1 and " +
+		"The caller must ensure len(needle) >= 1, idx1 and idx2 are distinct " +
+		"valid indices into needle (see SelectPair), and " +
 		"len(haystack) >= LOOP_SIZE_AVX2 + len(needle) - 1.")
 
 	needlePtr := Load(Param("needle").Base(), GP64())
-	needleLenMain := Load(Param("needle").Len(), GP64()); DECQ(needleLenMain)
+	needleLenFull := Load(Param("needle").Len(), GP64())
+
+	idx1Main := Load(Param("idx1"), GP64())
+	idx2Main := Load(Param("idx2"), GP64())
 
 	startPtr := Load(Param("haystack").Base(), GP64())
 	haystackLen, _ := Param("haystack").Len().Resolve()
 
 	endPtr := GP64(); MOVQ(startPtr, endPtr); ADDQ(haystackLen.Addr, endPtr)
 
-	// maxPtr is the last position where both 32-byte vector loads
-	// (at curPtr and at curPtr + len(needle) - 1) stay within the haystack.
-	// maxPtr == endPtr - LOOP_SIZE_AVX2 - (len(needle) - 1)
+	// maxPtr is the last curPtr for which the memcmp confirming a candidate
+	// match at the worst-case bit position (LOOP_SIZE_AVX2-1) never reads
+	// past the haystack: that candidate's footprint is
+	// [curPtr+LOOP_SIZE_AVX2-1, curPtr+LOOP_SIZE_AVX2-1+len(needle)), so we
+	// need curPtr+LOOP_SIZE_AVX2-1+len(needle)-1 < endPtr. This bound
+	// doesn't depend on idx1/idx2: since both are valid needle indices
+	// (<= len(needle)-1), it's also always sufficient to keep both coarse
+	// chunk loads (at curPtr+idx1 and curPtr+idx2) in bounds.
+	// maxPtr == endPtr - LOOP_SIZE_AVX2 - (len(needle) - 1), computed as
+	// endPtr - LOOP_SIZE_AVX2 - needleLenFull + 1 to avoid needing a
+	// separate needleLenFull-1 register.
 	maxPtr := GP64(); MOVQ(endPtr, maxPtr)
 	SUBQ(Imm(search.LOOP_SIZE_AVX2), maxPtr)
-	SUBQ(needleLenMain, maxPtr)
+	SUBQ(needleLenFull, maxPtr)
+	ADDQ(Imm(1), maxPtr)
 
 	// TODO: align curPtr https://github.com/BurntSushi/memchr/blob/master/src/arch/generic/memchr.rs#L169
 	curPtr := GP64(); MOVQ(startPtr, curPtr)
 
-	// TODO: We might want to find the rare bytes instead. See https://github.com/BurntSushi/memchr/blob/master/src/memmem/rarebytes.rs#L47
-	first, last := inlineSplat(needlePtr, needleLenMain)
+	first, last := inlineSplat(needlePtr, idx1Main, idx2Main)
 
 	// Do-while style loop that always ends with a scan at curPtr == maxPtr,
 	// so every candidate position in [startPtr, endPtr - len(needle)] is
@@ -58,7 +77,7 @@ func main() {
 
 	// TODO: unroll loop
 
-	o := inlineFindInChunk("main", first, last, curPtr, needlePtr, needleLenMain)
+	o := inlineFindInChunk("main", first, last, curPtr, idx1Main, idx2Main, needlePtr, needleLenFull)
 	Comment("break early when offset is >=0.")
 	CMPQ(o, Imm(0))
 	JGE(LabelRef("matched"))
@@ -87,17 +106,22 @@ func main() {
 	Generate()
 }
 
-// inlineSplat fills one 256bit register with repeated first neelde char and
-// another with repeated last needle char.
-func inlineSplat(needle0, needleLen reg.Register) (reg.VecVirtual, reg.VecVirtual) {
-	Comment("create vector filled with first and last character")
+// inlineSplat fills one 256bit register with the needle byte at idx1
+// repeated, and another with the byte at idx2 repeated - the two bytes the
+// coarse filter treats as most predictive of a genuine match (see
+// SelectPair). Unlike the needle's first/last byte, idx1 and idx2 can be any
+// two distinct valid positions in the needle.
+func inlineSplat(needlePtr, idx1, idx2 reg.Register) (reg.VecVirtual, reg.VecVirtual) {
+	Comment("create vector filled with the byte at idx1, and another for idx2")
 	f := YMM()
 	l := YMM()
 
-	needle1 := GP64()
-	LEAQ(Mem{Base: needle0, Index: needleLen, Scale: 1}, needle1)
-	VPBROADCASTB(Mem{Base: needle0}, f)
-	VPBROADCASTB(Mem{Base: needle1}, l)
+	p1 := GP64()
+	LEAQ(Mem{Base: needlePtr, Index: idx1, Scale: 1}, p1)
+	p2 := GP64()
+	LEAQ(Mem{Base: needlePtr, Index: idx2, Scale: 1}, p2)
+	VPBROADCASTB(Mem{Base: p1}, f)
+	VPBROADCASTB(Mem{Base: p2}, l)
 
 	return f, l
 }
@@ -114,20 +138,28 @@ func inlineMatched(startPtr, ptr, offset reg.Register) {
 	RET()
 }
 
-// inlineFindInChunk compares chunks of the first and last byte with chunks in the haystack.
-func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needlePtr, needleLen reg.Register) reg.Register {
+// inlineFindInChunk compares chunks at curPtr+idx1 and curPtr+idx2 against
+// the needle bytes at those positions (splatted into first/last), and for
+// any candidate that passes, confirms it with a full memcmp of the whole
+// needle (needlePtr, needleLen). Two of those needleLen byte comparisons
+// are strictly redundant (idx1 and idx2 are already known equal from the
+// coarse filter), but re-checking them keeps the confirmation loop simple;
+// with a well-chosen idx1/idx2 pair, confirmations should be rare enough
+// that this is not the bottleneck.
+func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, idx1, idx2, needlePtr, needleLen reg.Register) reg.Register {
 	Comment("begin " + caller + " find in chunk")
 	chunk0 := YMM()
 	chunk1 := YMM()
 
 	// create chunk0 and chunk1
-	c0 := curPtr
+	c0 := GP64()
+	LEAQ(Mem{Base: curPtr, Index: idx1, Scale: 1}, c0)
 	c1 := GP64()
-	LEAQ(Mem{Base: c0, Index: needleLen, Scale: 1}, c1)
+	LEAQ(Mem{Base: curPtr, Index: idx2, Scale: 1}, c1)
 	VMOVDQU(Mem{Base: c0}, chunk0)
 	VMOVDQU(Mem{Base: c1}, chunk1)
 
-	// compare first and last character with chunk0 and chunk1
+	// compare the byte at idx1 and idx2 with chunk0 and chunk1
 	eq0 := YMM()
 	eq1 := YMM()
 	VPCMPEQB(first, chunk0, eq0)
@@ -142,16 +174,6 @@ func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needle
 	offset := GP64()
 	MOVQ(I64(-1), offset)
 
-	// The mask already proves the first and last needle byte match, so the
-	// memcmp only needs to verify the interior needleLen-2 bytes. Pre-shift
-	// the needle pointer past byte 0 and the size down by one; the +1 on
-	// the candidate pointer is folded into the LEAQ inside the offsets loop.
-	Comment("pre-shift memcmp inputs to skip already-verified bytes")
-	nPtrShifted := GP64()
-	LEAQ(Mem{Base: needlePtr, Disp: 1}, nPtrShifted)
-	sizeShifted := GP64()
-	LEAQ(Mem{Base: needleLen, Disp: -1}, sizeShifted)
-
 	Comment("loop over offsets, ie bit positions")
 	Label(caller + "_offsets_loop")
 	CMPL(offsets, Imm(0))
@@ -159,11 +181,12 @@ func inlineFindInChunk(caller string, first, last reg.VecVirtual, curPtr, needle
 
 	TZCNTL(offsets, offset.As32())
 
+	Comment("candidate match start = curPtr + bit position")
 	chunkPtr := GP64()
-	LEAQ(Mem{Base: c0, Index: offset.As64(), Scale: 1, Disp: 1}, chunkPtr)
+	LEAQ(Mem{Base: curPtr, Index: offset.As64(), Scale: 1}, chunkPtr)
 
-	Comment("test chunk (interior only)")
-	cmpIndex := inlineMemcmp(caller, chunkPtr, nPtrShifted, sizeShifted)
+	Comment("test chunk (full needle)")
+	cmpIndex := inlineMemcmp(caller, chunkPtr, needlePtr, needleLen)
 	Comment("break early on a match")
 	CMPQ(cmpIndex, Imm(0))
 	JE(LabelRef(caller + "_chunk_match"))

@@ -16,13 +16,13 @@ func init() {
 			//
 			// Needles shorter than two bytes are also handed off: len == 0 has
 			// no defined position, and len == 1 collapses to bytes.IndexByte —
-			// which the stdlib already vectorizes and which lets the AVX2
-			// memcmp skip both the first and last needle byte without ever
-			// underflowing its size argument.
+			// which the stdlib already vectorizes, and SelectPair requires
+			// len(needle) >= 2 anyway.
 			if len(needle) < 2 || len(haystack) < LOOP_SIZE_AVX2+len(needle)-1 {
 				return int64(bytes.Index(haystack, needle))
 			}
-			return indexAvx2(haystack, needle)
+			idx1, idx2 := SelectPair(needle)
+			return indexAvx2(haystack, needle, idx1, idx2)
 		}
 	} else {
 		index = func(haystack []byte, needle []byte) int64 { return int64(bytes.Index(haystack, needle)) }

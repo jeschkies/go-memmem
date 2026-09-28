@@ -7,18 +7,22 @@
 TEXT ·findInChunk(SB), NOSPLIT, $0-56
 	MOVQ haystack_base+24(FP), AX
 	MOVQ needle_len+8(FP), CX
-	DECQ CX
 	MOVQ needle_base+0(FP), DX
+	MOVQ $+0, BX
+	MOVQ CX, SI
+	DECQ SI
 
-	// create vector filled with first and last character
-	LEAQ         (DX)(CX*1), BX
-	VPBROADCASTB (DX), Y0
-	VPBROADCASTB (BX), Y1
+	// create vector filled with the byte at idx1, and another for idx2
+	LEAQ         (DX)(BX*1), DI
+	LEAQ         (DX)(SI*1), R8
+	VPBROADCASTB (DI), Y0
+	VPBROADCASTB (R8), Y1
 
 	// begin test find in chunk
-	LEAQ     (AX)(CX*1), BX
-	VMOVDQU  (AX), Y2
-	VMOVDQU  (BX), Y3
+	LEAQ     (AX)(BX*1), BX
+	LEAQ     (AX)(SI*1), SI
+	VMOVDQU  (BX), Y2
+	VMOVDQU  (SI), Y3
 	VPCMPEQB Y0, Y2, Y0
 	VPCMPEQB Y1, Y3, Y1
 	VPAND    Y0, Y1, Y0
@@ -27,18 +31,16 @@ TEXT ·findInChunk(SB), NOSPLIT, $0-56
 	VPMOVMSKB Y0, BX
 	MOVQ      $-1, SI
 
-	// pre-shift memcmp inputs to skip already-verified bytes
-	LEAQ 1(DX), DX
-	LEAQ -1(CX), CX
-
 	// loop over offsets, ie bit positions
 test_offsets_loop:
 	CMPL   BX, $0x00
 	JE     test_offsets_loop_done
 	TZCNTL BX, SI
-	LEAQ   1(AX)(SI*1), DI
 
-	// test chunk (interior only)
+	// candidate match start = curPtr + bit position
+	LEAQ (AX)(SI*1), DI
+
+	// test chunk (full needle)
 	// compare two slices
 	MOVQ CX, R8
 	CMPQ CX, $0x04
@@ -106,56 +108,58 @@ test_chunk_match:
 	VZEROUPPER
 	RET
 
-// func indexAvx2(haystack []byte, needle []byte) int64
+// func indexAvx2(haystack []byte, needle []byte, idx1 int, idx2 int) int64
 // Requires: AVX, AVX2, BMI
-TEXT ·indexAvx2(SB), NOSPLIT, $8-56
+TEXT ·indexAvx2(SB), NOSPLIT, $8-72
 	MOVQ needle_base+24(FP), AX
 	MOVQ needle_len+32(FP), CX
-	DECQ CX
-	MOVQ haystack_base+0(FP), DX
-	MOVQ DX, BX
-	ADDQ haystack_len+8(FP), BX
-	SUBQ $0x20, BX
-	SUBQ CX, BX
-	MOVQ DX, SI
+	MOVQ idx1+48(FP), DX
+	MOVQ idx2+56(FP), BX
+	MOVQ haystack_base+0(FP), SI
+	MOVQ SI, DI
+	ADDQ haystack_len+8(FP), DI
+	SUBQ $0x20, DI
+	SUBQ CX, DI
+	ADDQ $0x01, DI
+	MOVQ SI, R8
 
-	// create vector filled with first and last character
-	LEAQ         (AX)(CX*1), DI
-	VPBROADCASTB (AX), Y0
-	VPBROADCASTB (DI), Y1
+	// create vector filled with the byte at idx1, and another for idx2
+	LEAQ         (AX)(DX*1), R9
+	LEAQ         (AX)(BX*1), R10
+	VPBROADCASTB (R9), Y0
+	VPBROADCASTB (R10), Y1
 
 chunk_loop:
 	// begin main find in chunk
-	LEAQ     (SI)(CX*1), DI
-	VMOVDQU  (SI), Y2
-	VMOVDQU  (DI), Y3
+	LEAQ     (R8)(DX*1), R9
+	LEAQ     (R8)(BX*1), R10
+	VMOVDQU  (R9), Y2
+	VMOVDQU  (R10), Y3
 	VPCMPEQB Y0, Y2, Y2
 	VPCMPEQB Y1, Y3, Y3
 	VPAND    Y2, Y3, Y2
 
 	// calculate offsets
-	VPMOVMSKB Y2, DI
-	MOVQ      $-1, R8
-
-	// pre-shift memcmp inputs to skip already-verified bytes
-	LEAQ 1(AX), R9
-	LEAQ -1(CX), R10
+	VPMOVMSKB Y2, R9
+	MOVQ      $-1, R10
 
 	// loop over offsets, ie bit positions
 main_offsets_loop:
-	CMPL   DI, $0x00
+	CMPL   R9, $0x00
 	JE     main_offsets_loop_done
-	TZCNTL DI, R8
-	LEAQ   1(SI)(R8*1), R11
+	TZCNTL R9, R10
 
-	// test chunk (interior only)
+	// candidate match start = curPtr + bit position
+	LEAQ (R8)(R10*1), R11
+
+	// test chunk (full needle)
 	// compare two slices
-	MOVQ R10, R12
-	CMPQ R10, $0x04
+	MOVQ CX, R12
+	CMPQ CX, $0x04
 	JGE  main_compare_four_bytes
 
 	// compare two slices one byte at a time
-	MOVQ R9, R13
+	MOVQ AX, R13
 
 main_memcmp_one_loop:
 	// loop by one byte
@@ -175,9 +179,9 @@ main_memcmp_one_loop_done:
 main_compare_four_bytes:
 	// compare two slices four bytes at a time
 	MOVQ R11, R13
-	MOVQ R9, R14
-	LEAQ -4(R11)(R10*1), R11
-	LEAQ -4(R9)(R10*1), R15
+	MOVQ AX, R14
+	LEAQ -4(R11)(CX*1), R11
+	LEAQ -4(AX)(CX*1), R15
 
 	// loop by four bytes
 main_memcmp_four_loop:
@@ -202,41 +206,41 @@ main_memcmp_done:
 	// break early on a match
 	CMPQ R12, $0x00
 	JE   main_chunk_match
-	MOVL DI, R8
-	DECL R8
-	ANDL R8, DI
+	MOVL R9, R10
+	DECL R10
+	ANDL R10, R9
 	JMP  main_offsets_loop
 
 main_offsets_loop_done:
-	MOVQ $-1, R8
+	MOVQ $-1, R10
 
 main_chunk_match:
 	// end main find in chunk
 	// break early when offset is >=0.
-	CMPQ R8, $0x00
+	CMPQ R10, $0x00
 	JGE  matched
 
 	// if curPtr == maxPtr we just scanned the final window
-	CMPQ SI, BX
+	CMPQ R8, DI
 	JGE  not_matched
 
 	// advance curPtr by LOOP_SIZE_AVX2, clamped to maxPtr
-	ADDQ $0x20, SI
-	CMPQ SI, BX
+	ADDQ $0x20, R8
+	CMPQ R8, DI
 	JLE  chunk_loop
-	MOVQ BX, SI
+	MOVQ DI, R8
 	JMP  chunk_loop
 
 matched:
 	// adjust the offset and return the true index
-	MOVQ SI, AX
-	SUBQ DX, AX
-	ADDQ R8, AX
-	MOVQ AX, ret+48(FP)
+	MOVQ R8, AX
+	SUBQ SI, AX
+	ADDQ R10, AX
+	MOVQ AX, ret+64(FP)
 	VZEROUPPER
 	RET
 
 not_matched:
-	MOVQ R8, ret+48(FP)
+	MOVQ R10, ret+64(FP)
 	VZEROUPPER
 	RET
