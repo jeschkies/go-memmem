@@ -4,13 +4,13 @@ package search
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/bits"
 	"simd/archsimd"
-	"unsafe"
 )
 
 // The AVX2 implementation follows Wojciech Muła's "generic SIMD" substring
-// search (http://0x80.pl/articles/simd-strfind.html): broadcast the first and
+// search (http://0x80.pl/notesen/2016-11-28-simd-strfind.html): broadcast the first and
 // last needle byte, compare them against two 32-byte loads of the haystack
 // that are len(needle)-1 bytes apart, and verify only the positions where both
 // bytes match.
@@ -41,41 +41,42 @@ func indexAVX2(haystack, needle []byte) int64 {
 	k := len(needle)
 	first := archsimd.BroadcastUint8x32(needle[0])
 	last := archsimd.BroadcastUint8x32(needle[k-1])
-	base := unsafe.Pointer(unsafe.SliceData(haystack))
 
 	// The filter already proved the first and last byte, so a candidate only
 	// needs needle[1:k-1], m bytes, compared against the haystack at p+1.
 	m := k - 2
-	n := unsafe.Add(unsafe.Pointer(unsafe.SliceData(needle)), 1)
+	n := needle[1 : k-1]
 
 	// maxPos is the last window start where both 32-byte loads stay within the
 	// haystack. Every candidate in [0, len(haystack)-k] is covered by the windows
 	// at 0, 32, 64, ... and the final window clamped to maxPos, so there is no
-	// scalar tail. The preconditions guarantee maxPos >= 0, which is why the
-	// loads below need no bounds checks. They also guarantee p+k <= len(haystack)
-	// for every candidate p, so the interior loads are in bounds too.
+	// scalar tail. The preconditions guarantee maxPos >= 0, so the window loads
+	// never fail, and p+k <= len(haystack) for every candidate p, so the interior
+	// slices never fail either. The code is bounds checked rather than unsafe on
+	// purpose: the loads below are slower than raw pointers but a violated
+	// precondition panics instead of reading out of bounds.
 	maxPos := len(haystack) - LOOP_SIZE_AVX2 - (k - 1)
 
 	for pos := 0; ; {
 		// Filter two windows (64 bytes) per iteration when both are in bounds and
 		// verify their candidates through one shared 64-bit mask.
-		mask := uint64(candidates(base, pos, k, first, last))
+		mask := uint64(candidates(haystack, pos, k, first, last))
 		step := LOOP_SIZE_AVX2
 		if pos+LOOP_SIZE_AVX2 <= maxPos {
-			mask |= uint64(candidates(base, pos+LOOP_SIZE_AVX2, k, first, last)) << 32
+			mask |= uint64(candidates(haystack, pos+LOOP_SIZE_AVX2, k, first, last)) << 32
 			step = 2 * LOOP_SIZE_AVX2
 		}
 
 	candidate:
 		for ; mask != 0; mask &= mask - 1 {
 			p := pos + bits.TrailingZeros64(mask)
-			c := unsafe.Add(base, p+1)
+			c := haystack[p+1 : p+1+m]
 
 			// Compare the interior like a memcmp: bytewise when shorter than four
 			// bytes, otherwise four bytes at a time with a final overlapping load.
 			if m < 4 {
 				for i := 0; i < m; i++ {
-					if *(*byte)(unsafe.Add(c, i)) != *(*byte)(unsafe.Add(n, i)) {
+					if c[i] != n[i] {
 						continue candidate
 					}
 				}
@@ -83,11 +84,11 @@ func indexAVX2(haystack, needle []byte) int64 {
 			}
 			tail := m - 4
 			for i := 0; i < tail; i += 4 {
-				if *(*uint32)(unsafe.Add(c, i)) != *(*uint32)(unsafe.Add(n, i)) {
+				if binary.LittleEndian.Uint32(c[i:]) != binary.LittleEndian.Uint32(n[i:]) {
 					continue candidate
 				}
 			}
-			if *(*uint32)(unsafe.Add(c, tail)) == *(*uint32)(unsafe.Add(n, tail)) {
+			if binary.LittleEndian.Uint32(c[tail:]) == binary.LittleEndian.Uint32(n[tail:]) {
 				return int64(p)
 			}
 		}
@@ -100,10 +101,10 @@ func indexAVX2(haystack, needle []byte) int64 {
 }
 
 // candidates returns a bitmask with bit i set when haystack[pos+i] equals the
-// first needle byte and haystack[pos+i+k-1] equals the last needle byte. The
-// caller guarantees both 32-byte loads are within the haystack.
-func candidates(base unsafe.Pointer, pos, k int, first, last archsimd.Uint8x32) uint32 {
-	head := archsimd.LoadUint8x32Array((*[LOOP_SIZE_AVX2]uint8)(unsafe.Add(base, pos)))
-	tail := archsimd.LoadUint8x32Array((*[LOOP_SIZE_AVX2]uint8)(unsafe.Add(base, pos+k-1)))
+// first needle byte and haystack[pos+i+k-1] equals the last needle byte. Both
+// 32-byte loads must be within the haystack or the slicing panics.
+func candidates(haystack []byte, pos, k int, first, last archsimd.Uint8x32) uint32 {
+	head := archsimd.LoadUint8x32(haystack[pos:])
+	tail := archsimd.LoadUint8x32(haystack[pos+k-1:])
 	return head.Equal(first).And(tail.Equal(last)).ToBits()
 }
