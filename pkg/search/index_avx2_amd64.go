@@ -4,7 +4,6 @@ package search
 
 import (
 	"bytes"
-	"encoding/binary"
 	"math/bits"
 	"simd/archsimd"
 )
@@ -43,8 +42,7 @@ func indexAVX2(haystack, needle []byte) int64 {
 	last := archsimd.BroadcastUint8x32(needle[k-1])
 
 	// The filter already proved the first and last byte, so a candidate only
-	// needs needle[1:k-1], m bytes, compared against the haystack at p+1.
-	m := k - 2
+	// needs needle[1:k-1] compared against the haystack at p+1.
 	n := needle[1 : k-1]
 
 	// maxPos is the last window start where both 32-byte loads stay within the
@@ -67,28 +65,11 @@ func indexAVX2(haystack, needle []byte) int64 {
 			step = 2 * LOOP_SIZE_AVX2
 		}
 
-	candidate:
 		for ; mask != 0; mask &= mask - 1 {
 			p := pos + bits.TrailingZeros64(mask)
-			c := haystack[p+1 : p+1+m]
+			c := haystack[p+1 : p+k-1]
 
-			// Compare the interior like a memcmp: bytewise when shorter than four
-			// bytes, otherwise four bytes at a time with a final overlapping load.
-			if m < 4 {
-				for i := 0; i < m; i++ {
-					if c[i] != n[i] {
-						continue candidate
-					}
-				}
-				return int64(p)
-			}
-			tail := m - 4
-			for i := 0; i < tail; i += 4 {
-				if binary.LittleEndian.Uint32(c[i:]) != binary.LittleEndian.Uint32(n[i:]) {
-					continue candidate
-				}
-			}
-			if binary.LittleEndian.Uint32(c[tail:]) == binary.LittleEndian.Uint32(n[tail:]) {
+			if bytes.Equal(c, n) {
 				return int64(p)
 			}
 		}
