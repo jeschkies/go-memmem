@@ -19,12 +19,14 @@ Only at those positions are the remaining needle bytes compared.
 | Platform | Implementation |
 |---|---|
 | amd64 with AVX2 | [`simd/archsimd`](https://pkg.go.dev/simd/archsimd), 32 bytes per vector |
+| arm64 | `simd/archsimd` (NEON), 16 bytes per vector |
 | anything else | `bytes.Index` |
 
-arm64 is not implemented yet and falls back to `bytes.Index`. A NEON port is
-planned, following the
+NEON has no movemask, so the arm64 version follows the
 [AArch64 variant](http://0x80.pl/notesen/2016-11-28-simd-strfind.html#aarch64-64-bit-code)
-of the same article.
+of the article: the compare result is read as two 64-bit halves and the
+matching bytes are walked in ascending order. It has not been benchmarked yet;
+the numbers below are amd64 only.
 
 ## Build Instructions
 
