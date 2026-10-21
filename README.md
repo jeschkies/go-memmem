@@ -66,15 +66,15 @@ pkg: github.com/jeschkies/go-memmem/pkg/search
 cpu: AMD Ryzen 9 9950X 16-Core Processor
               │     std     │                simd                │
               │   sec/op    │   sec/op     vs base               │
-IndexSmall-32   295.8µ ± 2%   133.7µ ± 1%  -54.81% (p=0.002 n=6)
-IndexBig-32     5.308m ± 1%   1.071m ± 0%  -79.82% (p=0.002 n=6)
-geomean         1.253m        378.4µ       -69.80%
+IndexSmall-32   294.6µ ± 1%   132.4µ ± 0%  -55.05% (p=0.002 n=6)
+IndexBig-32     5.302m ± 1%   1.109m ± 0%  -79.09% (p=0.002 n=6)
+geomean         1.250m        383.2µ       -69.34%
 
               │     std      │                 simd                  │
               │     B/s      │      B/s       vs base                │
-IndexSmall-32   13.33Gi ± 2%    29.49Gi ± 1%  +121.29% (p=0.002 n=6)
-IndexBig-32     3.661Gi ± 1%   18.141Gi ± 0%  +395.49% (p=0.002 n=6)
-geomean         6.985Gi         23.13Gi       +231.13%
+IndexSmall-32   13.38Gi ± 1%    29.76Gi ± 0%  +122.45% (p=0.002 n=6)
+IndexBig-32     3.666Gi ± 1%   17.531Gi ± 0%  +378.25% (p=0.002 n=6)
+geomean         7.003Gi         22.84Gi       +226.17%
 ```
 
 Here `std` is `bytes.Index` and `simd` is `Index`. A negative `sec/op` change
