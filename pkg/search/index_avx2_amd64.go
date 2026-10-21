@@ -34,18 +34,6 @@ func init() {
 	}
 }
 
-// Width classes for comparing the needle interior needle[1:k-1] (m = k-2
-// bytes). The filter already proved the first and last byte, so a candidate
-// only needs one or two integer compares of the interior. Two overlapping loads
-// of the class width cover every m in the class without a byte loop.
-const (
-	interior1     = iota // m == 1:     one byte
-	interior2to3         // m == 2..3:  two overlapping uint16
-	interior4to7         // m == 4..7:  two overlapping uint32
-	interior8to16        // m == 8..16: two overlapping uint64
-	interiorLong         // m > 16:     first uint64, then bytes.Equal
-)
-
 // indexAVX2 returns the first position the needle is in the haystack. The
 // caller must ensure len(needle) >= 2 and
 // len(haystack) >= LOOP_SIZE_AVX2 + len(needle) - 1.
@@ -55,6 +43,11 @@ func indexAVX2(haystack, needle []byte) int64 {
 	last := archsimd.BroadcastUint8x32(needle[k-1])
 	base := unsafe.Pointer(unsafe.SliceData(haystack))
 
+	// The filter already proved the first and last byte, so a candidate only
+	// needs needle[1:k-1], m bytes, compared against the haystack at p+1.
+	m := k - 2
+	n := unsafe.Add(unsafe.Pointer(unsafe.SliceData(needle)), 1)
+
 	// maxPos is the last window start where both 32-byte loads stay within the
 	// haystack. Every candidate in [0, len(haystack)-k] is covered by the windows
 	// at 0, 32, 64, ... and the final window clamped to maxPos, so there is no
@@ -62,44 +55,6 @@ func indexAVX2(haystack, needle []byte) int64 {
 	// loads below need no bounds checks. They also guarantee p+k <= len(haystack)
 	// for every candidate p, so the interior loads are in bounds too.
 	maxPos := len(haystack) - LOOP_SIZE_AVX2 - (k - 1)
-
-	// With two bytes the filter is exact: first and last are the whole needle.
-	if k == 2 {
-		for pos := 0; ; {
-			if mask := candidates(base, pos, k, first, last); mask != 0 {
-				return int64(pos + bits.TrailingZeros32(mask))
-			}
-			if pos >= maxPos {
-				return -1
-			}
-			pos = min(pos+LOOP_SIZE_AVX2, maxPos)
-		}
-	}
-
-	// Pick the interior width class once and load the needle words once. w0 is
-	// the interior prefix and w1 the interior suffix at offset off, both
-	// zero-extended to 64 bits. Verifying is done inline rather than in a called
-	// function so the vector registers stay live across candidates.
-	m := k - 2
-	n := unsafe.Add(unsafe.Pointer(unsafe.SliceData(needle)), 1)
-	var class int
-	var w0, w1 uint64
-	var off int
-	switch {
-	case m == 1:
-		class, w0 = interior1, uint64(*(*uint8)(n))
-	case m <= 3:
-		class, off = interior2to3, m-2
-		w0, w1 = uint64(*(*uint16)(n)), uint64(*(*uint16)(unsafe.Add(n, off)))
-	case m <= 7:
-		class, off = interior4to7, m-4
-		w0, w1 = uint64(*(*uint32)(n)), uint64(*(*uint32)(unsafe.Add(n, off)))
-	case m <= 16:
-		class, off = interior8to16, m-8
-		w0, w1 = *(*uint64)(n), *(*uint64)(unsafe.Add(n, off))
-	default:
-		class, w0 = interiorLong, *(*uint64)(n)
-	}
 
 	for pos := 0; ; {
 		// Filter two windows (64 bytes) per iteration when both are in bounds and
@@ -110,46 +65,38 @@ func indexAVX2(haystack, needle []byte) int64 {
 			mask |= uint64(candidates(base, pos+LOOP_SIZE_AVX2, k, first, last)) << 32
 			step = 2 * LOOP_SIZE_AVX2
 		}
+
+	candidate:
 		for ; mask != 0; mask &= mask - 1 {
 			p := pos + bits.TrailingZeros64(mask)
 			c := unsafe.Add(base, p+1)
-			switch class {
-			case interior1:
-				if uint64(*(*uint8)(c)) == w0 {
-					return int64(p)
+
+			// Compare the interior like a memcmp: bytewise when shorter than four
+			// bytes, otherwise four bytes at a time with a final overlapping load.
+			if m < 4 {
+				for i := 0; i < m; i++ {
+					if *(*byte)(unsafe.Add(c, i)) != *(*byte)(unsafe.Add(n, i)) {
+						continue candidate
+					}
 				}
-			case interior2to3:
-				if uint64(*(*uint16)(c)) == w0 && uint64(*(*uint16)(unsafe.Add(c, off))) == w1 {
-					return int64(p)
-				}
-			case interior4to7:
-				if uint64(*(*uint32)(c)) == w0 && uint64(*(*uint32)(unsafe.Add(c, off))) == w1 {
-					return int64(p)
-				}
-			case interior8to16:
-				if *(*uint64)(c) == w0 && *(*uint64)(unsafe.Add(c, off)) == w1 {
-					return int64(p)
-				}
-			default:
-				if *(*uint64)(c) == w0 && equalLong(c, n, m) {
-					return int64(p)
+				return int64(p)
+			}
+			tail := m - 4
+			for i := 0; i < tail; i += 4 {
+				if *(*uint32)(unsafe.Add(c, i)) != *(*uint32)(unsafe.Add(n, i)) {
+					continue candidate
 				}
 			}
+			if *(*uint32)(unsafe.Add(c, tail)) == *(*uint32)(unsafe.Add(n, tail)) {
+				return int64(p)
+			}
 		}
+
 		if pos >= maxPos {
 			return -1
 		}
 		pos = min(pos+step, maxPos)
 	}
-}
-
-// equalLong reports whether the m bytes at a and b are equal. It is a
-// separate function only so the call sits outside the hot loop's inlined
-// candidate check and does not keep the haystack and needle slices live there.
-//
-//go:noinline
-func equalLong(a, b unsafe.Pointer, m int) bool {
-	return bytes.Equal(unsafe.Slice((*byte)(a), m), unsafe.Slice((*byte)(b), m))
 }
 
 // candidates returns a bitmask with bit i set when haystack[pos+i] equals the
