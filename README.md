@@ -2,8 +2,29 @@
 SIMD accelerated search routines for Go
 
 This is a rough port of Rust's [memmem](https://github.com/BurntSushi/memchr/tree/master/src/memmem).
-It is roughly four times as fast as `bytes.Index` depending on the match.
-See [benchmarks](#benchmarks) for details.
+It is roughly five to eight times as fast as `bytes.Index` on the benchmark
+data below, depending on the match. See [benchmarks](#benchmarks) for details.
+
+## Algorithm
+
+The search is the "generic SIMD" algorithm from Wojciech Muła's
+[SIMD-friendly algorithms for substring searching](http://0x80.pl/notesen/2016-11-28-simd-strfind.html).
+The first and last byte of the needle are broadcast into two vectors. Each
+step compares them against two loads of the haystack that are `len(needle)-1`
+bytes apart and combines the results into a bit mask of candidate positions.
+Only at those positions are the remaining needle bytes compared.
+
+## Platform support
+
+| Platform | Implementation |
+|---|---|
+| amd64 with AVX2 | [`simd/archsimd`](https://pkg.go.dev/simd/archsimd), 32 bytes per vector |
+| anything else | `bytes.Index` |
+
+arm64 is not implemented yet and falls back to `bytes.Index`. A NEON port is
+planned, following the
+[AArch64 variant](http://0x80.pl/notesen/2016-11-28-simd-strfind.html#aarch64-64-bit-code)
+of the same article.
 
 ## Build Instructions
 
@@ -23,25 +44,42 @@ File Storage](https://git-lfs.com/).
 
 ## Benchmarks
 
-As always read these benchmarks with caution. This library is very fast when the
-needle is deep in a large haystack.
+`IndexSmall` and `IndexBig` search a needle in a log file from `data.zip`; the
+benchmark is in `pkg/search/bytes_test.go`. Read these numbers with caution:
+this library is very fast when the needle is deep in a large haystack, and the
+result depends on the needle and the data.
+
+Measured on 2026-10-21 with `benchstat` (6 runs each, `bytes.Index` against this
+library built with `GOEXPERIMENT=simd`):
+
+| | |
+|---|---|
+| CPU | AMD Ryzen 9 9950X, 16 cores / 32 threads |
+| Cache | 16 MiB L2, 64 MiB L3 |
+| OS | Linux 6.19.10 (Fedora 44), amd64 |
+| Go | go1.27.1 |
 
 ```
-› benchstat stdlib.log simd.log                                                                         
 goos: linux
 goarch: amd64
 pkg: github.com/jeschkies/go-memmem/pkg/search
-cpu: AMD Ryzen 7 3700X 8-Core Processor             
-              │ stdlib.log  │              simd.log              │
-              │   sec/op    │   sec/op     vs base               │
-IndexSmall-16   485.5µ ± 2%   128.4µ ± 3%  -73.55% (p=0.002 n=6)
-IndexBig-16     9.224m ± 1%   1.243m ± 1%  -86.52% (p=0.002 n=6)
-geomean         2.116m        399.5µ       -81.12%
+cpu: AMD Ryzen 9 9950X 16-Core Processor
+              │     std      │                simd                │
+              │    sec/op    │   sec/op     vs base               │
+IndexSmall-32   296.49µ ± 1%   62.16µ ± 5%  -79.03% (p=0.002 n=6)
+IndexBig-32     5348.2µ ± 1%   676.4µ ± 1%  -87.35% (p=0.002 n=6)
+geomean          1.259m        205.1µ       -83.72%
 
-              │  stdlib.log  │               simd.log                │
+              │     std      │                 simd                  │
               │     B/s      │      B/s       vs base                │
-IndexSmall-16   8.118Gi ± 2%   30.698Gi ± 3%  +278.13% (p=0.002 n=6)
-IndexBig-16     2.107Gi ± 1%   15.631Gi ± 1%  +641.87% (p=0.002 n=6)
-geomean         4.136Gi         21.91Gi       +429.64%
+IndexSmall-32   13.29Gi ± 1%    63.40Gi ± 5%  +376.98% (p=0.002 n=6)
+IndexBig-32     3.634Gi ± 1%   28.732Gi ± 1%  +690.64% (p=0.002 n=6)
+geomean         6.950Gi         42.68Gi       +514.10%
+```
 
+Here `std` is `bytes.Index` and `simd` is `Index`. A negative `sec/op` change
+means this library is faster. Reproduce with:
+
+```
+$ GOEXPERIMENT=simd go test ./pkg/search -run xxx -bench 'IndexSmall|IndexBig' -count 6
 ```
