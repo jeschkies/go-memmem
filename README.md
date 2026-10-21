@@ -2,7 +2,7 @@
 SIMD accelerated search routines for Go
 
 This is a rough port of Rust's [memmem](https://github.com/BurntSushi/memchr/tree/master/src/memmem).
-It is roughly five to eight times as fast as `bytes.Index` on the benchmark
+It is roughly two to five times as fast as `bytes.Index` on the benchmark
 data below, depending on the match. See [benchmarks](#benchmarks) for details.
 
 ## Algorithm
@@ -64,17 +64,17 @@ goos: linux
 goarch: amd64
 pkg: github.com/jeschkies/go-memmem/pkg/search
 cpu: AMD Ryzen 9 9950X 16-Core Processor
-              │     std      │                simd                │
-              │    sec/op    │   sec/op     vs base               │
-IndexSmall-32   296.49µ ± 1%   62.16µ ± 5%  -79.03% (p=0.002 n=6)
-IndexBig-32     5348.2µ ± 1%   676.4µ ± 1%  -87.35% (p=0.002 n=6)
-geomean          1.259m        205.1µ       -83.72%
+              │     std     │                simd                │
+              │   sec/op    │   sec/op     vs base               │
+IndexSmall-32   295.8µ ± 2%   133.7µ ± 1%  -54.81% (p=0.002 n=6)
+IndexBig-32     5.308m ± 1%   1.071m ± 0%  -79.82% (p=0.002 n=6)
+geomean         1.253m        378.4µ       -69.80%
 
               │     std      │                 simd                  │
               │     B/s      │      B/s       vs base                │
-IndexSmall-32   13.29Gi ± 1%    63.40Gi ± 5%  +376.98% (p=0.002 n=6)
-IndexBig-32     3.634Gi ± 1%   28.732Gi ± 1%  +690.64% (p=0.002 n=6)
-geomean         6.950Gi         42.68Gi       +514.10%
+IndexSmall-32   13.33Gi ± 2%    29.49Gi ± 1%  +121.29% (p=0.002 n=6)
+IndexBig-32     3.661Gi ± 1%   18.141Gi ± 0%  +395.49% (p=0.002 n=6)
+geomean         6.985Gi         23.13Gi       +231.13%
 ```
 
 Here `std` is `bytes.Index` and `simd` is `Index`. A negative `sec/op` change
