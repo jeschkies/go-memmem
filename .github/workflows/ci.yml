@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/setup-go@v4
         with:
-          go-version: '^1.24'
+          go-version: '^1.27'
           cache: false
       - uses: actions/checkout@v3
 
@@ -28,15 +28,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '^1.24'
-
-      - name: Generate 
-        run: |
-          go generate -v ./...
-          git diff --exit-code || (echo "Please generate assembly by running 'go generate ./...'" && false)
+          go-version: '^1.27'
 
       - name: Build
         run: go build -v ./...
 
+      - name: Build (simd)
+        run: go build -v ./...
+        env:
+          GOEXPERIMENT: simd
+
       - name: Test
         run: go test -v ./...
+
+      - name: Test (simd)
+        run: go test -v ./...
+        env:
+          GOEXPERIMENT: simd

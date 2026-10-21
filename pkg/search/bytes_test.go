@@ -1,10 +1,3 @@
-//go:build amd64
-
-// This file exercises the amd64-only AVX2 code path. The findInChunk symbol
-// referenced by TestMask is only declared in bytes_avx2_amd64.go, so this
-// entire file must be gated to amd64. Architecture-agnostic coverage of the
-// public Index API lives in api_test.go.
-
 package search
 
 import (
@@ -17,8 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
-
-//go:generate go run asm_avx2.go -out bytes_avx2_amd64.s -stubs bytes_avx2_amd64.go
 
 func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
@@ -180,7 +171,9 @@ func TestMask(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			index := findInChunk(tt.needle, tt.haystack)
+			// Pad so the haystack is long enough for the vectorized path.
+			haystack := append(append([]byte(nil), tt.haystack...), make([]byte, LOOP_SIZE_AVX2)...)
+			index := Index(haystack, tt.needle)
 			require.Equal(t, tt.index, index)
 			if index != -1 {
 				end := index + int64(len(tt.needle))

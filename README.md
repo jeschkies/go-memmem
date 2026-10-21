@@ -7,12 +7,16 @@ See [benchmarks](#benchmarks) for details.
 
 ## Build Instructions
 
-The code genereation requires [avo](https://github.com/mmcloughlin/avo):
+The SIMD code uses Go's [`simd/archsimd`](https://pkg.go.dev/simd/archsimd)
+package. It needs Go 1.27 or newer and is only compiled in with the
+experiment enabled:
 
-Generate code with
 ```
-$ go generate ./ ...
+$ GOEXPERIMENT=simd go test ./...
 ```
+
+Without `GOEXPERIMENT=simd`, or on a CPU without AVX2, `Index` falls back to
+`bytes.Index`. There is no generated assembly.
 
 The benchmarks depend on `data.zip` which must be checked out with [Git Large
 File Storage](https://git-lfs.com/).
