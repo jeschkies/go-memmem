@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+
+	"golang.org/x/sys/cpu"
 )
 
 const (
@@ -41,7 +43,14 @@ func BenchmarkIndexNeedleLen(b *testing.B) {
 			needle := append([]byte(nil), haystack[h-n:]...)
 			want := int64(bytes.Index(haystack, needle))
 
-			b.Run(fmt.Sprintf("needleLen=%d/haystackSize=%d/impl=simd", n, h), func(b *testing.B) {
+			b.Run(fmt.Sprintf("needleLen=%d/haystackSize=%d/impl=avx2", n, h), func(b *testing.B) {
+				if !cpu.X86.HasAVX2 {
+					b.Skipf("platform does not support AVX2")
+				}
+				if !SIMDactive {
+					b.Skipf("built without GOEXPERIMENT=simd")
+				}
+
 				b.SetBytes(int64(len(haystack)))
 				for b.Loop() {
 					if Index(haystack, needle) != want {

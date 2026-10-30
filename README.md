@@ -2,8 +2,8 @@
 SIMD accelerated search routines for Go
 
 This is a rough port of Rust's [memmem](https://github.com/BurntSushi/memchr/tree/master/src/memmem).
-It is roughly two to five times as fast as `bytes.Index` on the benchmark
-data below, depending on the match. See [benchmarks](#benchmarks) for details.
+It is roughly two to twenty times as fast as `bytes.Index` on the benchmark
+data below, depending on the size of the search space. See [benchmarks](#benchmarks) for details.
 
 ## Algorithm
 
