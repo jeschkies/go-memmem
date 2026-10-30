@@ -172,7 +172,7 @@ func TestMask(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// Pad so the haystack is long enough for the vectorized path.
-			haystack := append(append([]byte(nil), tt.haystack...), make([]byte, LOOP_SIZE_AVX2)...)
+			haystack := append(append([]byte(nil), tt.haystack...), make([]byte, 32)...)
 			index := Index(haystack, tt.needle)
 			require.Equal(t, tt.index, index)
 			if index != -1 {
@@ -201,7 +201,7 @@ func BenchmarkIndexSmall(b *testing.B) {
 }
 
 func BenchmarkIndexBig(b *testing.B) {
-	//needle := []byte("breitenberg1265")
+	// needle := []byte("breitenberg1265")
 	// log line 200,000.
 	needle := []byte(`40.42.170.227 - jast6265 [02/May/2023:10:20:14 +0000] "POST /markets/transition/enable/deploy HTTP/2.0" 203 13601`)
 	haystack, err := loadHaystack("big.log")

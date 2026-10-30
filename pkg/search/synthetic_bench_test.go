@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+const (
+	Byte = 1
+	KiB  = 1024 * Byte
+	MiB  = 1024 * KiB
+)
+
 // syntheticHaystack builds deterministic access-log-like data of roughly size
 // bytes. It stands in for data.zip, which needs Git LFS.
 func syntheticHaystack(size int) []byte {
@@ -25,18 +31,33 @@ func syntheticHaystack(size int) []byte {
 // BenchmarkIndexNeedleLen searches for a needle of a given length placed near
 // the end of a 16 MiB haystack.
 func BenchmarkIndexNeedleLen(b *testing.B) {
-	haystack := syntheticHaystack(16 << 20)
-	tail := haystack[len(haystack)-4096:]
-	for _, n := range []int{2, 3, 4, 5, 8, 9, 12, 13, 16, 32, 64} {
-		needle := append([]byte(nil), tail[1000:1000+n]...)
-		want := int64(bytes.Index(haystack, needle))
-		b.Run(fmt.Sprintf("len=%d", n), func(b *testing.B) {
-			b.SetBytes(int64(len(haystack)))
-			for b.Loop() {
-				if Index(haystack, needle) != want {
-					b.Fatal("wrong index")
+	needleLen := []int{2, 4, 8, 12, 16, 32, 64}
+	haystackSizes := []int{256 * KiB, 512 * KiB, 1 * MiB, 2 * MiB, 4 * MiB}
+	for _, n := range needleLen {
+		for _, h := range haystackSizes {
+			haystack := syntheticHaystack(h)
+
+			// Needle is always at the end
+			needle := append([]byte(nil), haystack[h-n:]...)
+			want := int64(bytes.Index(haystack, needle))
+
+			b.Run(fmt.Sprintf("needleLen=%d/haystackSize=%d/impl=simd", n, h), func(b *testing.B) {
+				b.SetBytes(int64(len(haystack)))
+				for b.Loop() {
+					if Index(haystack, needle) != want {
+						b.Fatal("wrong index")
+					}
 				}
-			}
-		})
+			})
+
+			b.Run(fmt.Sprintf("needleLen=%d/haystackSize=%d/impl=stdlib", n, h), func(b *testing.B) {
+				b.SetBytes(int64(len(haystack)))
+				for b.Loop() {
+					if int64(bytes.Index(haystack, needle)) != want {
+						b.Fatal("wrong index")
+					}
+				}
+			})
+		}
 	}
 }
