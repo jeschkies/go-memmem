@@ -1,24 +1,12 @@
-//go:build amd64
-
-// This file exercises the amd64-only AVX2 code path. The findInChunk symbol
-// referenced by TestMask is only declared in bytes_avx2_amd64.go, so this
-// entire file must be gated to amd64. Architecture-agnostic coverage of the
-// public Index API lives in api_test.go.
-
 package search
 
 import (
-	"archive/zip"
 	"bytes"
 	"fmt"
-	"io"
-	"log"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
-
-//go:generate go run asm_avx2.go -out bytes_avx2_amd64.s -stubs bytes_avx2_amd64.go
 
 func TestSimpleIndex(t *testing.T) {
 	for _, tt := range []struct {
@@ -180,7 +168,9 @@ func TestMask(t *testing.T) {
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			index := findInChunk(tt.needle, tt.haystack)
+			// Pad so the haystack is long enough for the vectorized path.
+			haystack := append(append([]byte(nil), tt.haystack...), make([]byte, 32)...)
+			index := Index(haystack, tt.needle)
 			require.Equal(t, tt.index, index)
 			if index != -1 {
 				end := index + int64(len(tt.needle))
@@ -188,55 +178,4 @@ func TestMask(t *testing.T) {
 			}
 		})
 	}
-}
-
-func BenchmarkIndexSmall(b *testing.B) {
-	needle := []byte("goldner7875")
-	haystack, err := loadHaystack("small.log")
-	if err != nil {
-		log.Fatalf(`msg="could not open log file" err=%s`, err)
-		b.Fail()
-	}
-	for b.Loop() {
-		//i := bytes.Index(haystack, needle)
-		i := Index(haystack, needle)
-		if i == -1 {
-			b.Fail()
-		}
-		b.SetBytes(int64(i) + int64(len(needle)))
-	}
-}
-
-func BenchmarkIndexBig(b *testing.B) {
-	//needle := []byte("breitenberg1265")
-	// log line 200,000.
-	needle := []byte(`40.42.170.227 - jast6265 [02/May/2023:10:20:14 +0000] "POST /markets/transition/enable/deploy HTTP/2.0" 203 13601`)
-	haystack, err := loadHaystack("big.log")
-	if err != nil {
-		log.Fatalf(`msg="could not open log file" err=%s`, err)
-		b.Fail()
-	}
-
-	for b.Loop() {
-		//i := bytes.Index(haystack, needle)
-		i := Index(haystack, needle)
-		if i == -1 {
-			b.Fail()
-		}
-		b.SetBytes(int64(i) + int64(len(needle)))
-	}
-}
-
-func loadHaystack(name string) ([]byte, error) {
-	r, err := zip.OpenReader("data.zip")
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close() //nolint:errcheck
-
-	f, err := r.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	return io.ReadAll(f)
 }
