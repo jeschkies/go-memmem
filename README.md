@@ -2,7 +2,7 @@
 SIMD accelerated search routines for Go
 
 This is a rough port of Rust's [memmem](https://github.com/BurntSushi/memchr/tree/master/src/memmem).
-It is roughly two to twenty times as fast as `bytes.Index` on the benchmark
+It is typical 4-6 times as fast as `bytes.Index` on the benchmark
 data below, depending on the size of the search space. See [benchmarks](#benchmarks) for details.
 
 ## Algorithm
@@ -19,14 +19,7 @@ Only at those positions are the remaining needle bytes compared.
 | Platform | Implementation |
 |---|---|
 | amd64 with AVX2 | [`simd/archsimd`](https://pkg.go.dev/simd/archsimd), 32 bytes per vector |
-| arm64 | `simd/archsimd` (NEON), 16 bytes per vector |
 | anything else | `bytes.Index` |
-
-NEON has no movemask, so the arm64 version follows the
-[AArch64 variant](http://0x80.pl/notesen/2016-11-28-simd-strfind.html#aarch64-64-bit-code)
-of the article: the compare result is read as two 64-bit halves and the
-matching bytes are walked in ascending order. It has not been benchmarked yet;
-the numbers below are amd64 only.
 
 ## Build Instructions
 
@@ -39,49 +32,47 @@ $ GOEXPERIMENT=simd go test ./...
 ```
 
 Without `GOEXPERIMENT=simd`, or on a CPU without AVX2, `Index` falls back to
-`bytes.Index`. There is no generated assembly.
-
-The benchmarks depend on `data.zip` which must be checked out with [Git Large
-File Storage](https://git-lfs.com/).
+`bytes.Index`.
 
 ## Benchmarks
 
-`IndexSmall` and `IndexBig` search a needle in a log file from `data.zip`; the
-benchmark is in `pkg/search/bytes_test.go`. Read these numbers with caution:
-this library is very fast when the needle is deep in a large haystack, and the
-result depends on the needle and the data.
+The benchmark `BenchmarkIndexNeedleLen` runs on synthetic logging data in two dimensions. One is a needle length from
+two to sixtyfour. The other is the haystack size which is 256 KiB to 4 MiB.
 
-Measured on 2026-10-21 with `benchstat` (6 runs each, `bytes.Index` against this
-library built with `GOEXPERIMENT=simd`):
+![benchmark plot](./bench.png)
 
-| | |
-|---|---|
-| CPU | AMD Ryzen 9 9950X, 16 cores / 32 threads |
-| Cache | 16 MiB L2, 64 MiB L3 |
-| OS | Linux 6.19.10 (Fedora 44), amd64 |
-| Go | go1.27.1 |
+The plot shows throughput over haystack size for different needle sizes. The algorithm has the bigger advantage on
+longer needles over larger haystacks. 
+
+<details>
+<summary>benchstat: index benchmark, <code>avx2</code> against <code>stdlib</code></summary>
 
 ```
+> GOEXPERIMENT=simd go test -run='^$' -bench='BenchmarkIndexNeedleLen' -count 10 ./... > results.log
+> benchstat -row "/haystackSize" -col "/impl" results.log
 goos: linux
 goarch: amd64
 pkg: github.com/jeschkies/go-memmem/pkg/search
 cpu: AMD Ryzen 9 9950X 16-Core Processor
-              │     std     │                simd                │
-              │   sec/op    │   sec/op     vs base               │
-IndexSmall-32   294.6µ ± 1%   132.4µ ± 0%  -55.05% (p=0.002 n=6)
-IndexBig-32     5.302m ± 1%   1.109m ± 0%  -79.09% (p=0.002 n=6)
-geomean         1.250m        383.2µ       -69.34%
+        │      avx2      │                  stdlib                   │
+        │     sec/op     │     sec/op       vs base                  │
+262144    10.48µ ±  5% ¹    47.69µ ± 48% ¹   +355.25% (p=0.000 n=70)
+524288    23.15µ ±  5% ¹   107.65µ ± 60% ¹   +365.02% (p=0.000 n=70)
+1048576   40.46µ ±  2% ¹   258.01µ ±  4% ¹   +537.63% (p=0.000 n=70)
+2097152   109.4µ ± 31% ¹    221.0µ ± 60% ¹   +101.99% (p=0.000 n=70)
+4194304   194.1µ ±  6% ¹   3679.2µ ±  0% ¹  +1795.45% (p=0.000 n=70)
+geomean   46.11µ            254.9µ           +452.92%
+¹ benchmarks vary in .fullname
 
-              │     std      │                 simd                  │
-              │     B/s      │      B/s       vs base                │
-IndexSmall-32   13.38Gi ± 1%    29.76Gi ± 0%  +122.45% (p=0.002 n=6)
-IndexBig-32     3.666Gi ± 1%   17.531Gi ± 0%  +378.25% (p=0.002 n=6)
-geomean         7.003Gi         22.84Gi       +226.17%
+        │       avx2       │             stdlib              │
+        │       B/s        │       B/s        vs base        │
+262144    23.305Gi ±  4% ¹   5.119Gi ± 73% ¹  -78.03% (n=70)
+524288    21.093Gi ±  5% ¹   4.536Gi ± 38% ¹  -78.50% (n=70)
+1048576   24.136Gi ±  2% ¹   3.785Gi ±  5% ¹  -84.32% (n=70)
+2097152   17.853Gi ± 24% ¹   8.839Gi ± 37% ¹  -50.49% (n=70)
+4194304   20.125Gi ±  6% ¹   1.062Gi ±  0% ¹  -94.72% (n=70)
+geomean    21.18Gi           3.831Gi          -81.91%
+¹ benchmarks vary in .fullname
 ```
 
-Here `std` is `bytes.Index` and `simd` is `Index`. A negative `sec/op` change
-means this library is faster. Reproduce with:
-
-```
-$ GOEXPERIMENT=simd go test ./pkg/search -run xxx -bench 'IndexSmall|IndexBig' -count 6
-```
+</details>
