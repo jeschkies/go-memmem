@@ -45,7 +45,7 @@ The plot shows throughput over haystack size for different needle sizes. The alg
 longer needles over larger haystacks. 
 
 <details>
-<summary>benchstat: index benchmark, <code>avx2</code> against <code>stdlib</code></summary>
+<summary>benchstat: index benchmark, <code>avx2</code> against <code>stdlib</code> and generate plot</summary>
 
 ```
 > GOEXPERIMENT=simd go test -run='^$' -bench='BenchmarkIndexNeedleLen' -count 10 ./... > results.log
@@ -73,6 +73,7 @@ geomean   46.11µ            254.9µ           +452.92%
 4194304   20.125Gi ±  6% ¹   1.062Gi ±  0% ¹  -94.72% (n=70)
 geomean    21.18Gi           3.831Gi          -81.91%
 ¹ benchmarks vary in .fullname
+> uv run scripts/plot_bench.py results.log -o bench.png
 ```
 
 </details>
